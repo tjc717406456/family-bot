@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}成员管理 - Google Family Bot{% endblock %}
+
+{% block extra_head %}
+<style>
+    .tool-bar { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .tool-bar .form-label { font-weight: 500; white-space: nowrap; }
+    .oauth-input { border: 2px dashed #0dcaf0; border-radius: 6px; transition: border-color .2s; }
+    .oauth-input:focus { border-color: #0d6efd; box-shadow: 0 0 0 .2rem rgba(13,110,253,.15); }
+    .table th { font-size: 13px; text-align: center; vertical-align: middle; white-space: nowrap; }
+    .table td { font-size: 13px; vertical-align: middle; text-align: center; }
+    .table td:nth-child(2) { text-align: left; }
+    .table td:last-child { text-align: left; }
+    .td-error, .td-remark { text-align: left !important; max-width: 220px; }
+    .btn-xs { font-size: 11px; padding: 1px 6px; border-radius: 3px; }
+    .btn-group-ops { display: flex; gap: 4px; flex-wrap: wrap; }
+    .copy-btn { cursor: pointer; color: #0d6efd; border: 1px solid #0d6efd; background: transparent; border-radius: 3px; font-size: 11px; padding: 1px 6px; transition: all .15s; }
+    .copy-btn:hover { background: #0d6efd; color: #fff; }
+    .clear-btn { cursor: pointer; color: #dc3545; border: 1px solid #dc3545; background: transparent; border-radius: 3px; font-size: 11px; padding: 1px 6px; transition: all .15s; }
+    .clear-btn:hover { background: #dc3545; color: #fff; }
+    .remark-text { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; font-size: 12px; color: #495057; }
+    .error-text { font-size: 12px; }
+    .status-badge { font-size: 11px; padding: 3px 8px; border-radius: 4px; }
+    .add-form-card { border-left: 3px solid #198754; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">成员管理</h4>
+    <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#addForm">
+        + 添加成员
+    </button>
+</div>
+
+<!-- 工具栏：筛选 + OAuth 链接 -->
+<div class="tool-bar">
+    <div class="row g-3 align-items-center">
+        <div class="col-auto">
+            <form method="GET" class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0">家长筛选</label>
+                <select name="parent_id" class="form-select form-select-sm" style="width:220px;" onchange="this.form.submit()">
+                    <option value="">全部</option>
+                    {% for p in parents %}
+                    <option value="{{ p.id }}" {% if current_parent_id == p.id %}selected{% endif %}>{{ p.email }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+        <div class="col">
+            <div class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0">OAuth 链接</label>
+                <input type="text" id="oauthUrl" class="form-control form-control-sm oauth-input" placeholder="粘贴 Antigravity OAuth 链接到这里...">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加成员表单 -->
+<div class="collapse mb-3" id="addForm">
+    <div class="card card-body add-form-card">
+        <form method="POST" action="/member/add">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">所属家长 <span class="text-danger">*</span></label>
+                    <select name="parent_id" class="form-select" required>
+                        <option value="">请选择</option>
+                        {% for p in parents %}
+                        <option value="{{ p.id }}">{{ p.email }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">邮箱 <span class="text-danger">*</span></label>
+                    <input type="email" name="email" class="form-control" required placeholder="member@gmail.com">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">密码 <span class="text-danger">*</span></label>
+                    <input type="text" name="password" class="form-control" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">TOTP密钥</label>
+                    <input type="text" name="totp_secret" class="form-control" placeholder="可选">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">备注</label>
+                    <input type="text" name="remark" class="form-control" placeholder="可选">
+                </div>
+            </div>
+            <div class="mt-2">
+                <button type="submit" class="btn btn-success btn-sm">提交</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if members %}
+<div class="table-responsive">
+    <table class="table table-bordered table-hover bg-white mb-0">
+        <thead>
+            <tr class="table-dark">
+                <th>ID</th>
+                <th>邮箱</th>
+                <th>所属家长</th>
+                <th>状态</th>
+                <th>错误信息</th>
+                <th>备注</th>
+                <th>更新时间</th>
+                <th style="min-width:200px;">操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in members %}
+            <tr>
+                <td>{{ m.id }}</td>
+                <td style="text-align:left;"><code>{{ m.email }}</code></td>
+                <td><small class="text-muted">{{ m.parent_email }}</small></td>
+                <td><span class="badge status-badge badge-{{ m.status }}">{{ m.status }}</span></td>
+                <td class="td-error">
+                    {% if m.error_msg %}
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="error-text text-danger text-truncate" style="max-width:160px;" title="{{ m.error_msg }}">{{ m.error_msg }}</span>
+                        <form method="POST" action="/member/clear_error/{{ m.id }}" class="d-inline">
+                            <button type="submit" class="clear-btn" title="清空错误">x</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </td>
+                <td class="td-remark">
+                    {% if m.remark %}
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="remark-text" title="{{ m.remark }}">{{ m.remark }}</span>
+                        <button class="copy-btn" onclick="copyText('{{ m.remark }}', this)" title="复制">复制</button>
+                        <form method="POST" action="/member/clear_remark/{{ m.id }}" class="d-inline">
+                            <button type="submit" class="clear-btn" title="清空备注">x</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </td>
+                <td><small class="text-muted">{{ m.updated_at }}</small></td>
+                <td>
+                    <div class="btn-group-ops">
+                        {% if m.status in ('pending', 'gemini_done', 'failed') %}
+                        <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline">
+                            <button type="submit" class="btn btn-primary btn-xs">执行</button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="/member/antigravity/{{ m.id }}" class="d-inline">
+                            <input type="hidden" name="oauth_url" class="ag-oauth-url">
+                            {% if m.status == 'joined' %}
+                            <button type="submit" class="btn btn-info btn-xs text-white" onclick="return fillOauthUrl(this)">Antigravity</button>
+                            {% else %}
+                            <button type="button" class="btn btn-secondary btn-xs" disabled>Antigravity</button>
+                            {% endif %}
+                        </form>
+                        {% if m.status in ('failed', 'gemini_done', 'joined') %}
+                        <form method="POST" action="/member/reset/{{ m.id }}" class="d-inline">
+                            <button type="submit" class="btn btn-warning btn-xs">重置</button>
+                        </form>
+                        {% endif %}
+                        <button class="btn btn-danger btn-xs" data-bs-toggle="modal" data-bs-target="#delModal{{ m.id }}">删除</button>
+                    </div>
+                    <div class="modal fade" id="delModal{{ m.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-sm">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h6 class="modal-title">确认删除</h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">确定删除成员 <strong>{{ m.email }}</strong>？</div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                                    <form method="POST" action="/member/delete/{{ m.id }}" class="d-inline">
+                                        <button type="submit" class="btn btn-danger btn-sm">确认删除</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <p>暂无成员数据</p>
+    <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#addForm">添加第一个成员</button>
+</div>
+{% endif %}
+
+<script>
+function fillOauthUrl(btn) {
+    var url = document.getElementById('oauthUrl').value.trim();
+    if (!url) {
+        alert('请先在顶部填入 OAuth 链接');
+        return false;
+    }
+    btn.closest('form').querySelector('.ag-oauth-url').value = url;
+    return true;
+}
+
+function copyText(text, btn) {
+    navigator.clipboard.writeText(text).then(function() {
+        var orig = btn.innerHTML;
+        btn.innerHTML = '已复制';
+        btn.style.background = '#198754';
+        btn.style.borderColor = '#198754';
+        btn.style.color = '#fff';
+        setTimeout(function() {
+            btn.innerHTML = orig;
+            btn.style.background = '';
+            btn.style.borderColor = '';
+            btn.style.color = '';
+        }, 1500);
+    });
+}
+</script>
+{% endblock %}

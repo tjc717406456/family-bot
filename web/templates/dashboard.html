@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}看板 - Google Family Bot{% endblock %}
+
+{% block content %}
+<h4 class="mb-3">状态汇总</h4>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-warning">待处理</h5>
+                <h2>{{ total.pending }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-primary">Gemini 已开通</h5>
+                <h2>{{ total.gemini_done }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">已加入</h5>
+                <h2>{{ total.joined }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-danger">失败</h5>
+                <h2>{{ total.failed }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h5 class="mb-3">各家长详情</h5>
+{% if parents %}
+<div class="table-responsive">
+    <table class="table table-bordered table-hover bg-white">
+        <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>邮箱</th>
+                <th>昵称</th>
+                <th>上限</th>
+                <th class="text-warning">待处理</th>
+                <th class="text-primary">Gemini</th>
+                <th class="text-success">已加入</th>
+                <th class="text-danger">失败</th>
+                <th>总计</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in parents %}
+            <tr>
+                <td>{{ p.id }}</td>
+                <td>{{ p.email }}</td>
+                <td>{{ p.nickname }}</td>
+                <td>{{ p.max_members }}</td>
+                <td>{{ p.counts.pending }}</td>
+                <td>{{ p.counts.gemini_done }}</td>
+                <td>{{ p.counts.joined }}</td>
+                <td>{{ p.counts.failed }}</td>
+                <td>{{ p.total }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-muted">暂无数据，请先添加家长和成员。</p>
+{% endif %}
+{% endblock %}

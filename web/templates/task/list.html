@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}任务管理 - Google Family Bot{% endblock %}
+
+{% block content %}
+<h4 class="mb-3">任务管理</h4>
+
+<!-- 触发按钮区 -->
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="card-title">执行自动化任务</h6>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <form method="POST" action="/task/run/all" class="d-inline">
+                <button type="submit" class="btn btn-primary" {% if total_pending == 0 %}disabled{% endif %}>
+                    全量执行 ({{ total_pending }} 个待处理)
+                </button>
+            </form>
+        </div>
+
+        {% if parents %}
+        <h6>按家长执行</h6>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            {% for p in parents %}
+            <form method="POST" action="/task/run/parent/{{ p.id }}" class="d-inline">
+                <button type="submit" class="btn btn-outline-primary btn-sm" {% if p.pending_count == 0 %}disabled{% endif %}>
+                    {{ p.email }} ({{ p.pending_count }})
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if members %}
+        <h6>按成员执行</h6>
+        <div class="d-flex flex-wrap gap-2">
+            {% for m in members %}
+            <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline">
+                <button type="submit" class="btn btn-outline-secondary btn-sm">
+                    {{ m.email }} <span class="badge badge-{{ m.status }}">{{ m.status }}</span>
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 任务进度表格 -->
+<h5 class="mb-3">任务状态</h5>
+<div class="table-responsive">
+    <table class="table table-bordered table-hover bg-white" id="taskTable">
+        <thead class="table-light">
+            <tr>
+                <th>任务ID</th>
+                <th>类型</th>
+                <th>详情</th>
+                <th>状态</th>
+                <th>进度</th>
+                <th>开始时间</th>
+                <th>结束时间</th>
+                <th>错误</th>
+            </tr>
+        </thead>
+        <tbody id="taskBody">
+            {% for tid, t in tasks.items() %}
+            <tr>
+                <td><small>{{ tid }}</small></td>
+                <td>{{ t.type }}</td>
+                <td>
+                    {% if t.type == 'member' %}{{ t.email }}
+                    {% elif t.type == 'parent' %}{{ t.parent_email }} ({{ t.member_count }}个)
+                    {% else %}全量 ({{ t.member_count }}个)
+                    {% endif %}
+                </td>
+                <td><span class="badge badge-{{ t.status }}">{{ t.status }}</span></td>
+                <td>
+                    {% if t.get('member_count') %}{{ t.progress }}/{{ t.member_count }}
+                    {% elif t.status == 'done' %}完成
+                    {% elif t.status == 'running' %}执行中
+                    {% else %}-{% endif %}
+                </td>
+                <td>{{ t.started_at }}</td>
+                <td>{{ t.finished_at or '-' }}</td>
+                <td><small class="text-danger">{{ t.error or '' }}</small></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-muted text-center">暂无任务记录</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 记录哪些任务之前还在运行
+var prevRunning = {};
+
+// 每3秒轮询任务状态
+setInterval(function() {
+    fetch('/task/status/all')
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('taskBody');
+            const entries = Object.entries(data);
+            if (entries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center">暂无任务记录</td></tr>';
+                return;
+            }
+
+            // 检测是否有任务刚完成，跳转到成员列表
+            var hasRunning = false;
+            entries.forEach(([tid, t]) => {
+                if (t.status === 'running') hasRunning = true;
+                if (t.status === 'done' && prevRunning[tid]) {
+                    delete prevRunning[tid];
+                    setTimeout(function() { window.location.href = '/member/'; }, 1500);
+                }
+                if (t.status === 'running') prevRunning[tid] = true;
+            });
+
+            let html = '';
+            entries.forEach(([tid, t]) => {
+                let detail = '';
+                if (t.type === 'member') detail = t.email;
+                else if (t.type === 'parent') detail = t.parent_email + ' (' + t.member_count + '个)';
+                else detail = '全量 (' + t.member_count + '个)';
+
+                let progress = '-';
+                if (t.member_count) progress = t.progress + '/' + t.member_count;
+                else if (t.status === 'done') progress = '完成';
+                else if (t.status === 'running') progress = '执行中';
+
+                html += '<tr>' +
+                    '<td><small>' + tid + '</small></td>' +
+                    '<td>' + t.type + '</td>' +
+                    '<td>' + detail + '</td>' +
+                    '<td><span class="badge badge-' + t.status + '">' + t.status + '</span></td>' +
+                    '<td>' + progress + '</td>' +
+                    '<td>' + t.started_at + '</td>' +
+                    '<td>' + (t.finished_at || '-') + '</td>' +
+                    '<td><small class="text-danger">' + (t.error || '') + '</small></td>' +
+                    '</tr>';
+            });
+            tbody.innerHTML = html;
+        })
+        .catch(() => {});
+}, 3000);
+</script>
+{% endblock %}

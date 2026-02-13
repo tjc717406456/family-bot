@@ -1,0 +1,6 @@
+playwright>=1.40.0
+click>=8.1.0
+sqlalchemy>=2.0.0
+rich>=13.0.0
+pyotp>=2.9.0
+flask>=3.0.0

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}家长管理 - Google Family Bot{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">家长管理</h4>
+    <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#addForm">
+        + 添加家长
+    </button>
+</div>
+
+<div class="collapse mb-3" id="addForm">
+    <div class="card card-body">
+        <form method="POST" action="/parent/add">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">邮箱 <span class="text-danger">*</span></label>
+                    <input type="email" name="email" class="form-control" required placeholder="parent@gmail.com">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">昵称</label>
+                    <input type="text" name="nickname" class="form-control" placeholder="可选">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">最大成员数</label>
+                    <input type="number" name="max_members" class="form-control" value="5" min="1">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-success">提交</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if parents %}
+<div class="table-responsive">
+    <table class="table table-bordered table-hover bg-white">
+        <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>邮箱</th>
+                <th>昵称</th>
+                <th>最大成员数</th>
+                <th>当前成员数</th>
+                <th>创建时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in parents %}
+            <tr>
+                <td>{{ p.id }}</td>
+                <td>{{ p.email }}</td>
+                <td>{{ p.nickname }}</td>
+                <td>{{ p.max_members }}</td>
+                <td>{{ p.member_count }}</td>
+                <td>{{ p.created_at }}</td>
+                <td>
+                    <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#delModal{{ p.id }}">删除</button>
+                    <!-- 删除确认 Modal -->
+                    <div class="modal fade" id="delModal{{ p.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-sm">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h6 class="modal-title">确认删除</h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    确定删除家长 <strong>{{ p.email }}</strong> 及其所有成员？
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                                    <form method="POST" action="/parent/delete/{{ p.id }}" class="d-inline">
+                                        <button type="submit" class="btn btn-danger btn-sm">确认删除</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-muted">暂无家长数据。</p>
+{% endif %}
+{% endblock %}
