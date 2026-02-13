@@ -141,7 +141,7 @@
                 <td>
                     <div class="btn-group-ops">
                         {% if m.status in ('pending', 'gemini_done', 'failed') %}
-                        <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline">
+                        <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline" onsubmit="return confirmRun()">
                             <button type="submit" class="btn btn-primary btn-xs">执行</button>
                         </form>
                         {% endif %}
@@ -191,6 +191,10 @@
 {% endif %}
 
 <script>
+function confirmRun() {
+    return confirm('请确认已用主号发送了家庭组邀请邮件！\n\n点击「确定」继续执行，点击「取消」停止任务。');
+}
+
 function fillOauthUrl(btn) {
     var url = document.getElementById('oauthUrl').value.trim();
     if (!url) {

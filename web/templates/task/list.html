@@ -9,7 +9,7 @@
     <div class="card-body">
         <h6 class="card-title">执行自动化任务</h6>
         <div class="d-flex flex-wrap gap-2 mb-3">
-            <form method="POST" action="/task/run/all" class="d-inline">
+            <form method="POST" action="/task/run/all" class="d-inline" onsubmit="return confirmRun()">
                 <button type="submit" class="btn btn-primary" {% if total_pending == 0 %}disabled{% endif %}>
                     全量执行 ({{ total_pending }} 个待处理)
                 </button>
@@ -20,7 +20,7 @@
         <h6>按家长执行</h6>
         <div class="d-flex flex-wrap gap-2 mb-3">
             {% for p in parents %}
-            <form method="POST" action="/task/run/parent/{{ p.id }}" class="d-inline">
+            <form method="POST" action="/task/run/parent/{{ p.id }}" class="d-inline" onsubmit="return confirmRun()">
                 <button type="submit" class="btn btn-outline-primary btn-sm" {% if p.pending_count == 0 %}disabled{% endif %}>
                     {{ p.email }} ({{ p.pending_count }})
                 </button>
@@ -33,7 +33,7 @@
         <h6>按成员执行</h6>
         <div class="d-flex flex-wrap gap-2">
             {% for m in members %}
-            <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline">
+            <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline" onsubmit="return confirmRun()">
                 <button type="submit" class="btn btn-outline-secondary btn-sm">
                     {{ m.email }} <span class="badge badge-{{ m.status }}">{{ m.status }}</span>
                 </button>
@@ -92,6 +92,10 @@
 
 {% block extra_js %}
 <script>
+function confirmRun() {
+    return confirm('请确认已用主号发送了家庭组邀请邮件！\n\n点击「确定」继续执行，点击「取消」停止任务。');
+}
+
 // 记录哪些任务之前还在运行
 var prevRunning = {};
 
