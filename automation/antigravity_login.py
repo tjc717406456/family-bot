@@ -15,6 +15,17 @@ from db.models import Member
 console = Console()
 
 
+async def _wait_url_change(page, old_url: str, timeout=10000):
+    """等待URL变化，变了立刻返回，最多等timeout毫秒"""
+    try:
+        await page.wait_for_function(
+            f'() => window.location.href !== "{old_url}"',
+            timeout=timeout,
+        )
+    except Exception:
+        pass
+
+
 async def antigravity_login(member_id: int, oauth_url: str) -> bool:
     """
     Antigravity OAuth 登录：
@@ -54,7 +65,10 @@ async def antigravity_login(member_id: int, oauth_url: str) -> bool:
                 # Step 1: 打开 OAuth 链接
                 console.print("[dim]打开 OAuth 链接...[/dim]")
                 await page.goto(oauth_url, wait_until="domcontentloaded", timeout=60000)
-                await page.wait_for_timeout(5000)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:
+                    pass
 
                 # Step 2: 检测当前页面状态，按情况处理
                 callback_url = await _handle_oauth_flow(page, member)
@@ -97,24 +111,23 @@ async def _handle_oauth_flow(page, member):
 
     try:
         for attempt in range(20):
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(1000)
 
-            # 检查是否已捕获回调 URL
             if captured_url:
                 return captured_url[0]
 
             current_url = page.url
             console.print(f"[dim]当前页面: {current_url[:120]}[/dim]")
 
-            # chrome-error 说明跳转到了无法访问的地址，检查是否已捕获
+            # chrome-error 说明跳转到了无法访问的地址
             if "chrome-error" in current_url:
                 if captured_url:
                     return captured_url[0]
-                await page.wait_for_timeout(3000)
+                await page.wait_for_timeout(2000)
                 if captured_url:
                     return captured_url[0]
                 console.print("[dim]页面加载错误，等待...[/dim]")
-                await page.wait_for_timeout(5000)
+                await page.wait_for_timeout(2000)
                 continue
 
             # 已跳转到 localhost 回调，流程完成
@@ -122,30 +135,28 @@ async def _handle_oauth_flow(page, member):
                 console.print("[green]已跳转到回调地址[/green]")
                 return current_url
 
-            # Google 内部中间跳转页（SetSID 等），等它自动跳转完
+            # Google 内部中间跳转页（SetSID 等），监测URL变化
             if "accounts.youtube.com" in current_url or "accounts.google.com/SetSID" in current_url:
                 console.print("[dim]中间跳转页面，等待自动跳转...[/dim]")
-                await page.wait_for_timeout(5000)
+                await _wait_url_change(page, current_url, timeout=8000)
                 continue
 
             # OAuth consent 授权确认页面，点 Allow
             if "signin/oauth/consent" in current_url or "oauth/consent" in current_url:
                 console.print("[dim]检测到 OAuth 授权确认页面[/dim]")
-                await page.wait_for_timeout(3000)
                 allowed = await _click_allow(page)
                 if allowed:
-                    await page.wait_for_timeout(10000)
+                    await _wait_url_change(page, current_url, timeout=10000)
                     continue
 
             # "Choose an account" 页面
             if await _is_choose_account_page(page):
                 console.print(f"[dim]检测到选择账号页面，选择: {member.email}[/dim]")
-                await page.wait_for_timeout(3000)
                 selected = await _select_account(page, member.email)
                 if not selected:
                     console.print(f"[red]未找到账号: {member.email}[/red]")
                     return None
-                await page.wait_for_timeout(5000)
+                await _wait_url_change(page, current_url, timeout=8000)
                 continue
 
             # 2FA 页面
@@ -154,24 +165,22 @@ async def _handle_oauth_flow(page, member):
                 try:
                     if await totp_input.is_visible():
                         console.print("[dim]检测到 2FA 页面[/dim]")
-                        await page.wait_for_timeout(3000)
                         await _handle_2fa(page, member.totp_secret)
-                        await page.wait_for_timeout(5000)
+                        await _wait_url_change(page, current_url, timeout=8000)
                         continue
                 except Exception:
                     pass
 
             # "Make sure you downloaded this app" / Sign in 页面
-            await page.wait_for_timeout(3000)
             signed_in = await _click_sign_in(page)
             if signed_in:
                 console.print("[dim]已点击 Sign in，等待跳转...[/dim]")
-                await page.wait_for_timeout(10000)
+                await _wait_url_change(page, current_url, timeout=10000)
                 continue
 
             # 都不是，等一会再检测
             console.print(f"[dim]等待页面变化 (第 {attempt + 1} 次)...[/dim]")
-            await page.wait_for_timeout(5000)
+            await page.wait_for_timeout(3000)
     finally:
         page.remove_listener("request", on_request)
 
@@ -253,7 +262,7 @@ async def _handle_2fa(page, totp_secret: str):
             console.print(f"[dim]生成 TOTP 验证码: {code}[/dim]")
             await totp_input.fill(code)
             await page.locator("#totpNext").click()
-            await page.wait_for_timeout(5000)
+            await _wait_url_change(page, page.url, timeout=8000)
     except Exception:
         console.print("[dim]2FA 处理失败，跳过[/dim]")
 

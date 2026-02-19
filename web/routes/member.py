@@ -50,8 +50,8 @@ def add_member():
     totp_secret = request.form.get("totp_secret", "").strip()
     remark = request.form.get("remark", "").strip()
 
-    if not parent_id or not email or not password:
-        flash("家长、邮箱、密码为必填项", "danger")
+    if not parent_id or not email or not password or not totp_secret:
+        flash("家长、邮箱、密码、2FA密钥为必填项", "danger")
         return redirect(url_for("member.list_members"))
 
     session = get_session()
