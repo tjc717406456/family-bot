@@ -1,6 +1,6 @@
-# Google Family Bot
+#  Family Bot
 
-Google 家庭组自动化管理工具，支持 Web 界面和 CLI 命令行两种操作方式。
+家庭组自动化管理工具，支持 Web 界面和 CLI 命令行两种操作方式。
 
 自动完成：Google 账号登录 → Gemini 开通 → 家庭组邀请接受 → Antigravity OAuth 授权。
 
