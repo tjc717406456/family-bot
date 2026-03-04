@@ -29,6 +29,7 @@ class Member(Base):
     password = Column(Text, nullable=False)
     totp_secret = Column(Text)
     remark = Column(Text)
+    remark2 = Column(Text)
     status = Column(Text, default="pending")  # pending / gemini_done / joined / failed
     error_msg = Column(Text)
     created_at = Column(DateTime, default=datetime.now)

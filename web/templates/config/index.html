@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Antigravity 配置 - Google Family Bot{% endblock %}
+
+{% block extra_head %}
+<style>
+    .config-card { border-left: 3px solid #0d6efd; }
+    .form-label { font-weight: 500; }
+    .help-text { font-size: 0.875rem; color: #6c757d; margin-top: 0.25rem; }
+    .readonly-field { background-color: #e9ecef; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Antigravity 配置</h4>
+</div>
+
+<div class="card config-card">
+    <div class="card-body">
+        <form method="POST" action="/config/save">
+            <div class="row g-3">
+                <!-- Antigravity 配置（可编辑） -->
+                <div class="col-12">
+                    <h5 class="border-bottom pb-2 mb-3">Antigravity Manager 配置</h5>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">API 地址 <span class="text-danger">*</span></label>
+                    <input type="url" name="antigravity_api_url" class="form-control" 
+                           value="{{ config.antigravity_api_url }}" 
+                           placeholder="https://your-domain.com" required>
+                    <div class="help-text">Antigravity Manager 的部署地址</div>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">API Key <span class="text-danger">*</span></label>
+                    <input type="text" name="antigravity_api_key" class="form-control" 
+                           value="{{ config.antigravity_api_key }}" 
+                           placeholder="your-api-key" required>
+                    <div class="help-text">Antigravity Manager 的 API 密钥（通常是 UI 页面登录密码）</div>
+                </div>
+
+                <!-- 说明 -->
+                <div class="col-12 mt-3">
+                    <div class="alert alert-info">
+                        <strong>使用说明：</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>配置好后，点击成员列表的 <strong>Antigravity</strong> 按钮即可自动完成授权并上传账号</li>
+                            <li>API 地址填写你的 Antigravity Manager 部署地址（不要带 /api/accounts 后缀）</li>
+                            <li>API Key 通常就是你登录 Antigravity Manager UI 页面的密码</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 提交按钮 -->
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">保存配置</button>
+                    <a href="/member/" class="btn btn-secondary">返回成员列表</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

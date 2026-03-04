@@ -8,10 +8,10 @@ SCREENSHOT_DIR = os.path.join(DATA_DIR, "screenshots")
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 # 浏览器配置
-BROWSER_HEADLESS = False
-BROWSER_SLOW_MO = 500  # 毫秒，放慢操作便于观察
-BROWSER_CHANNEL = "chrome"  # 使用本机 Google Chrome
-BROWSER_USER_DATA_DIR = os.path.join(DATA_DIR, "chrome_profiles")  # 保存浏览器登录状态
+BROWSER_HEADLESS = os.environ.get("BROWSER_HEADLESS", "false").lower() in ("true", "1", "yes")
+BROWSER_SLOW_MO = int(os.environ.get("BROWSER_SLOW_MO", "500"))
+BROWSER_CHANNEL = os.environ.get("BROWSER_CHANNEL", "chrome")
+BROWSER_USER_DATA_DIR = os.path.join(DATA_DIR, "chrome_profiles")
 
 # 超时配置（秒）
 PAGE_LOAD_TIMEOUT = 30000

@@ -2,6 +2,10 @@ import pyotp
 from playwright.async_api import Page, BrowserContext
 from rich.console import Console
 from config import GOOGLE_SIGNIN_URL, LOGIN_TIMEOUT
+from automation.wait_utils import (
+    wait_for_networkidle, wait_for_url_change,
+    click_and_wait_hidden, click_and_wait_nav,
+)
 
 console = Console()
 
@@ -15,9 +19,8 @@ async def google_login(page: Page, email: str, password: str, totp_secret: str =
     console.print(f"[dim]请求地址: {GOOGLE_SIGNIN_URL}[/dim]")
 
     await page.goto(GOOGLE_SIGNIN_URL, wait_until="domcontentloaded", timeout=60000)
-    await page.wait_for_timeout(3000)
+    await wait_for_networkidle(page, timeout=8000)
 
-    # 检测是否已登录（独立 profile 里只有这一个账号，session 还在就直接跳过）
     current_url = page.url
     if "accounts.google.com/signin" not in current_url and "accounts.google.com/v3/signin" not in current_url:
         console.print(f"[green]已有登录态，跳过登录: {email}[/green]")
@@ -30,52 +33,47 @@ async def google_login(page: Page, email: str, password: str, totp_secret: str =
         await email_input.fill(email)
         console.print(f"[dim]已填入邮箱: {email}[/dim]")
     except Exception:
-        # 邮箱输入框不存在，可能已登录
         console.print(f"[green]已有登录态，跳过登录: {email}[/green]")
         return True
 
-    # 点击下一步
+    # 点击下一步，等密码框出现
     await page.locator("#identifierNext").click()
-    await page.wait_for_timeout(2000)
 
-    # 填入密码
     password_input = page.locator('input[name="Passwd"]')
     await password_input.wait_for(state="visible", timeout=LOGIN_TIMEOUT)
     await password_input.fill(password)
     console.print("[dim]已填入密码[/dim]")
 
-    # 点击下一步
+    # 点击下一步，等待 URL 变化或 2FA 框出现
+    old_url = page.url
     await page.locator("#passwordNext").click()
-    await page.wait_for_timeout(3000)
 
-    # 检测是否需要 2FA
     if totp_secret:
+        totp_input = page.locator('input[type="tel"]')
         try:
-            totp_input = page.locator('input[type="tel"]')
-            is_visible = await totp_input.is_visible()
-            if is_visible:
-                totp = pyotp.TOTP(totp_secret)
-                code = totp.now()
-                console.print(f"[dim]生成 TOTP 验证码: {code}[/dim]")
-                await totp_input.fill(code)
-                await page.locator("#totpNext").click()
-                await page.wait_for_timeout(3000)
+            await totp_input.wait_for(state="visible", timeout=8000)
+            totp = pyotp.TOTP(totp_secret)
+            code = totp.now()
+            console.print(f"[dim]生成 TOTP 验证码: {code}[/dim]")
+            await totp_input.fill(code)
+            await click_and_wait_nav(page, page.locator("#totpNext"), timeout=8000)
         except Exception:
             console.print("[dim]未检测到 2FA 页面，跳过[/dim]")
+    else:
+        await wait_for_url_change(page, old_url, timeout=8000)
 
-    # 跳过 Passkey 注册页面（"Sign in faster" / "Not now"）
+    # 跳过 Passkey 注册页面
     try:
         not_now_btn = page.locator('button:has-text("Not now")').or_(
             page.locator('button:has-text("以后再说")')
         )
-        await not_now_btn.wait_for(state="visible", timeout=5000)
-        await not_now_btn.click()
+        await not_now_btn.wait_for(state="visible", timeout=3000)
+        await click_and_wait_hidden(page, not_now_btn, timeout=3000)
         console.print("[dim]跳过 Passkey 注册页面[/dim]")
-        await page.wait_for_timeout(2000)
     except Exception:
         pass
 
-    # 处理 Chrome "Turn on sync?" / "登录 Chrome" 弹窗
+    # 处理 Chrome "Turn on sync?" 弹窗
     try:
         sync_btn = page.locator('button:has-text("Continue")').or_(
             page.locator('button:has-text("继续")').or_(
@@ -84,10 +82,9 @@ async def google_login(page: Page, email: str, password: str, totp_secret: str =
                 )
             )
         )
-        await sync_btn.first.wait_for(state="visible", timeout=5000)
-        await sync_btn.first.click()
+        await sync_btn.first.wait_for(state="visible", timeout=3000)
+        await click_and_wait_hidden(page, sync_btn.first, timeout=3000)
         console.print("[dim]确认 Chrome 同步账号[/dim]")
-        await page.wait_for_timeout(2000)
     except Exception:
         pass
 

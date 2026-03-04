@@ -77,12 +77,21 @@ async def antigravity_login(member_id: int, oauth_url: str) -> bool:
                     await _screenshot(page, member, "oauth_failed")
                     return False
 
-                # Step 3: 写入 remark
+                # Step 3: 解析回调 URL → 换 token → 获取用户信息 → 上传
                 console.print(f"[dim]回调 URL: {callback_url[:120]}[/dim]")
-                member.remark = callback_url
+
+                try:
+                    from automation.oauth_utils import process_callback
+                    result = process_callback(callback_url)
+
+                    member.remark = f"已提交API: {result.get('api_result', '')}"
+                    console.print(f"[bold green]===== {member.email} Antigravity 授权+上传 全部完成 =====[/bold green]\n")
+                except Exception as e:
+                    console.print(f"[yellow]提交失败: {e}，回调 URL 已保存到 remark[/yellow]")
+                    member.remark = callback_url
+
                 member.updated_at = datetime.now()
                 session.commit()
-                console.print(f"[bold green]===== {member.email} Antigravity 登录完成 =====[/bold green]\n")
                 return True
 
             except Exception as e:
@@ -149,6 +158,11 @@ async def _handle_oauth_flow(page, member):
                     await _wait_url_change(page, current_url, timeout=10000)
                     continue
 
+            # "Google hasn't verified this app" 未验证应用警告页
+            if await _handle_unverified_app_warning(page):
+                await _wait_url_change(page, current_url, timeout=8000)
+                continue
+
             # "Choose an account" 页面
             if await _is_choose_account_page(page):
                 console.print(f"[dim]检测到选择账号页面，选择: {member.email}[/dim]")
@@ -186,6 +200,98 @@ async def _handle_oauth_flow(page, member):
 
     console.print("[yellow]OAuth 流程超时[/yellow]")
     return None
+
+
+async def _handle_unverified_app_warning(page) -> bool:
+    """处理 'Google hasn't verified this app' 未验证应用警告页面，点 Advanced -> Go to xxx (unsafe)"""
+    try:
+        body_text = await page.locator("body").inner_text()
+        body_lower = body_text.lower().replace("\u2019", "'").replace("\u2018", "'")
+        warning_keywords = ["hasn't verified", "isn't verified", "unverified app", "this app isn't verified"]
+        if not any(kw in body_lower for kw in warning_keywords):
+            return False
+
+        console.print("[dim]检测到未验证应用警告页面[/dim]")
+
+        # 第一步：点 "Advanced" / "高级" 链接
+        advanced_selectors = [
+            '#details-button',
+            'a:has-text("Advanced")',
+            'a:has-text("高级")',
+            'button:has-text("Advanced")',
+            '[id="advanced-link"]',
+        ]
+        clicked_advanced = False
+        for sel in advanced_selectors:
+            try:
+                el = page.locator(sel).first
+                if await el.is_visible():
+                    await el.click()
+                    console.print(f"[dim]已点击 Advanced: {sel}[/dim]")
+                    clicked_advanced = True
+                    break
+            except Exception:
+                continue
+
+        if not clicked_advanced:
+            # JS 兜底
+            clicked_advanced = await page.evaluate('''() => {
+                const links = document.querySelectorAll('a, button');
+                for (const el of links) {
+                    const text = (el.innerText || '').trim().toLowerCase();
+                    if (text === 'advanced' || text === '高级' || text.includes('advanced')) {
+                        el.click();
+                        return true;
+                    }
+                }
+                return false;
+            }''')
+            if clicked_advanced:
+                console.print("[dim]已点击 Advanced(JS)[/dim]")
+
+        if not clicked_advanced:
+            console.print("[dim]未找到 Advanced 按钮[/dim]")
+            return False
+
+        await page.wait_for_timeout(1000)
+
+        # 第二步：点 "Go to xxx (unsafe)" 链接
+        go_selectors = [
+            'a:has-text("Go to")',
+            'a:has-text("转到")',
+            'a[id="proceed-link"]',
+            '#proceed-link',
+        ]
+        for sel in go_selectors:
+            try:
+                el = page.locator(sel).first
+                if await el.is_visible():
+                    await el.click()
+                    console.print(f"[dim]已点击 Go to (unsafe): {sel}[/dim]")
+                    return True
+            except Exception:
+                continue
+
+        # JS 兜底
+        clicked_go = await page.evaluate('''() => {
+            const links = document.querySelectorAll('a');
+            for (const el of links) {
+                const text = (el.innerText || '').toLowerCase();
+                if (text.includes('go to') || text.includes('转到') || text.includes('unsafe')) {
+                    el.click();
+                    return true;
+                }
+            }
+            return false;
+        }''')
+        if clicked_go:
+            console.print("[dim]已点击 Go to (unsafe)(JS)[/dim]")
+            return True
+
+        console.print("[dim]未找到 Go to (unsafe) 链接[/dim]")
+        return False
+    except Exception:
+        return False
 
 
 async def _is_choose_account_page(page) -> bool:

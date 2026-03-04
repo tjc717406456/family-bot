@@ -60,11 +60,11 @@ def run_parent(parent_id):
         if not p:
             flash("家长不存在", "danger")
             return redirect(url_for("task.list_tasks"))
-        task_id = task_manager.run_parent(p.id, p.email)
-        if task_id is None:
+        task_ids = task_manager.run_parent(p.id, p.email)
+        if not task_ids:
             flash(f"家长 {p.email} 下没有待处理成员", "warning")
         else:
-            flash(f"已启动任务：{p.email} 下所有待处理成员", "success")
+            flash(f"已启动 {len(task_ids)} 个并行任务：{p.email} 下所有待处理成员", "success")
     finally:
         session.close()
     return redirect(url_for("task.list_tasks"))
@@ -72,14 +72,21 @@ def run_parent(parent_id):
 
 @bp.route("/run/all", methods=["POST"])
 def run_all():
-    task_id = task_manager.run_all()
-    if task_id is None:
+    task_ids = task_manager.run_all()
+    if not task_ids:
         flash("没有待处理的成员", "warning")
     else:
-        flash("已启动全量执行任务", "success")
+        flash(f"已启动 {len(task_ids)} 个并行任务", "success")
     return redirect(url_for("task.list_tasks"))
 
 
 @bp.route("/status/all")
 def status_all():
     return jsonify(task_manager.get_all_tasks())
+
+
+@bp.route("/clear", methods=["POST"])
+def clear_tasks():
+    count = task_manager.clear_finished_tasks()
+    flash(f"已清理 {count} 个已完成任务", "success") if count else flash("没有可清理的任务", "info")
+    return redirect(url_for("task.list_tasks"))

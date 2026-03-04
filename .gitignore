@@ -9,6 +9,9 @@ build/
 # 数据目录（数据库、浏览器配置、截图）
 data/
 
+# 敏感配置
+antigravity_config.json
+
 # 环境
 .env
 venv/

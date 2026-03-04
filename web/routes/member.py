@@ -1,6 +1,10 @@
+import os
+import shutil
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from db.database import get_session
 from db.models import Parent, Member
+from config import BROWSER_USER_DATA_DIR
 from web.task_manager import task_manager
 
 bp = Blueprint("member", __name__)
@@ -24,11 +28,14 @@ def list_members():
             data.append({
                 "id": m.id,
                 "email": m.email,
+                "password": m.password or "",
+                "totp_secret": m.totp_secret or "",
                 "parent_email": m.parent.email if m.parent else "-",
                 "parent_id": m.parent_id,
                 "status": m.status,
                 "error_msg": m.error_msg or "",
                 "remark": m.remark or "",
+                "remark2": m.remark2 or "",
                 "created_at": m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "-",
                 "updated_at": m.updated_at.strftime("%Y-%m-%d %H:%M") if m.updated_at else "-",
             })
@@ -76,6 +83,97 @@ def add_member():
     return redirect(url_for("member.list_members"))
 
 
+@bp.route("/batch_import", methods=["POST"])
+def batch_import():
+    parent_id = request.form.get("parent_id", type=int)
+    members_data = request.form.get("members_data", "").strip()
+
+    if not parent_id or not members_data:
+        flash("请选择家长并填写成员数据", "danger")
+        return redirect(url_for("member.list_members"))
+
+    session = get_session()
+    try:
+        # 解析成员数据
+        lines = members_data.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        
+        added_count = 0
+        skipped_count = 0
+        error_count = 0
+        
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 移除结尾的分号（中英文）
+            line = line.rstrip(";；")
+            
+            # 按 ---- 分割
+            parts = line.split("----")
+            
+            # 至少需要 3 个字段：邮箱、密码、2FA
+            # 如果有 4 个字段：邮箱、密码、辅助邮箱、2FA（跳过辅助邮箱）
+            if len(parts) < 3:
+                flash(f"第 {line_num} 行格式错误，已跳过: {line[:50]}", "warning")
+                error_count += 1
+                continue
+            
+            email = parts[0].strip()
+            password = parts[1].strip()
+            
+            # 判断是否有辅助邮箱
+            if len(parts) >= 4:
+                # 有辅助邮箱，跳过第3个字段，取第4个作为2FA
+                totp_secret = parts[3].strip()
+            else:
+                # 没有辅助邮箱，第3个字段就是2FA
+                totp_secret = parts[2].strip()
+            
+            if not email or not password or not totp_secret:
+                flash(f"第 {line_num} 行数据不完整，已跳过", "warning")
+                error_count += 1
+                continue
+            
+            # 检查是否已存在
+            exists = session.query(Member).filter_by(email=email).first()
+            if exists:
+                skipped_count += 1
+                continue
+            
+            # 添加成员
+            try:
+                m = Member(
+                    parent_id=parent_id,
+                    email=email,
+                    password=password,
+                    totp_secret=totp_secret,
+                )
+                session.add(m)
+                added_count += 1
+            except Exception as e:
+                flash(f"添加 {email} 失败: {e}", "danger")
+                error_count += 1
+        
+        session.commit()
+        
+        # 显示导入结果
+        result_msg = f"导入完成：成功 {added_count} 个"
+        if skipped_count > 0:
+            result_msg += f"，跳过 {skipped_count} 个（已存在）"
+        if error_count > 0:
+            result_msg += f"，失败 {error_count} 个"
+        
+        flash(result_msg, "success" if error_count == 0 else "warning")
+    except Exception as e:
+        session.rollback()
+        flash(f"批量导入失败: {e}", "danger")
+    finally:
+        session.close()
+    
+    return redirect(url_for("member.list_members"))
+
+
 @bp.route("/delete/<int:member_id>", methods=["POST"])
 def delete_member(member_id):
     session = get_session()
@@ -85,9 +183,20 @@ def delete_member(member_id):
             flash("成员不存在", "danger")
         else:
             email = m.email
+            mid = m.id
             session.delete(m)
             session.commit()
-            flash(f"成员 {email} 已删除", "success")
+
+            # 删除浏览器登录信息
+            profile_dir = os.path.join(BROWSER_USER_DATA_DIR, f"member_{mid}")
+            if os.path.exists(profile_dir):
+                try:
+                    shutil.rmtree(profile_dir)
+                    flash(f"成员 {email} 及其登录信息已删除", "success")
+                except Exception as e:
+                    flash(f"成员 {email} 已删除，但清除登录信息失败: {e}", "warning")
+            else:
+                flash(f"成员 {email} 已删除", "success")
     finally:
         session.close()
     return redirect(url_for("member.list_members"))
@@ -142,12 +251,51 @@ def clear_remark(member_id):
     return redirect(url_for("member.list_members"))
 
 
+@bp.route("/save_remark2/<int:member_id>", methods=["POST"])
+def save_remark2(member_id):
+    remark2 = request.form.get("remark2", "").strip()
+    session = get_session()
+    try:
+        m = session.query(Member).get(member_id)
+        if m:
+            m.remark2 = remark2 or None
+            session.commit()
+    finally:
+        session.close()
+    return redirect(url_for("member.list_members"))
+
+
+@bp.route("/clear_remark2/<int:member_id>", methods=["POST"])
+def clear_remark2(member_id):
+    session = get_session()
+    try:
+        m = session.query(Member).get(member_id)
+        if m:
+            m.remark2 = None
+            session.commit()
+    finally:
+        session.close()
+    return redirect(url_for("member.list_members"))
+
+
+@bp.route("/open_browser/<int:member_id>", methods=["POST"])
+def open_browser(member_id):
+    session = get_session()
+    try:
+        member = session.query(Member).get(member_id)
+        if not member:
+            flash("成员不存在", "danger")
+            return redirect(url_for("member.list_members"))
+        task_id = task_manager.run_open_browser(member.id, member.email)
+        flash(f"已启动成员 {member.email} 的浏览器 (任务ID: {task_id})", "info")
+    finally:
+        session.close()
+    return redirect(url_for("member.list_members"))
+
+
 @bp.route("/antigravity/<int:member_id>", methods=["POST"])
 def antigravity(member_id):
-    oauth_url = request.form.get("oauth_url", "").strip()
-    if not oauth_url:
-        flash("请先填入 OAuth 链接", "danger")
-        return redirect(url_for("member.list_members"))
+    from automation.oauth_utils import generate_oauth_url
 
     session = get_session()
     try:
@@ -156,6 +304,7 @@ def antigravity(member_id):
             flash("成员不存在", "danger")
             return redirect(url_for("member.list_members"))
 
+        oauth_url = generate_oauth_url()
         task_id = task_manager.run_antigravity(member.id, member.email, oauth_url)
         flash(f"Antigravity 任务已启动: {member.email} (任务ID: {task_id})", "info")
     finally:
