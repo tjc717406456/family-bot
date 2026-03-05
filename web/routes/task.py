@@ -1,16 +1,20 @@
+import logging
+
 from flask import Blueprint, render_template, jsonify, flash, redirect, url_for
+from sqlalchemy.orm import joinedload
 from db.database import get_session
 from db.models import Parent, Member
 from web.task_manager import task_manager
 
 bp = Blueprint("task", __name__)
+logger = logging.getLogger(__name__)
 
 
 @bp.route("/")
 def list_tasks():
-    session = get_session()
-    try:
-        parents = session.query(Parent).all()
+    with get_session() as session:
+        # eager load members 避免 N+1
+        parents = session.query(Parent).options(joinedload(Parent.members)).all()
         parent_list = []
         for p in parents:
             pending = [m for m in p.members if m.status in ("pending", "gemini_done")]
@@ -19,13 +23,13 @@ def list_tasks():
                 "email": p.email,
                 "pending_count": len(pending),
             })
-        members = session.query(Member).filter(
+        members = session.query(Member).options(
+            joinedload(Member.parent)
+        ).filter(
             Member.status.in_(["pending", "gemini_done"])
         ).all()
         member_list = [{"id": m.id, "email": m.email, "status": m.status, "parent_email": m.parent.email} for m in members]
         total_pending = len(member_list)
-    finally:
-        session.close()
 
     tasks = task_manager.get_all_tasks()
     return render_template(
@@ -39,24 +43,20 @@ def list_tasks():
 
 @bp.route("/run/member/<int:member_id>", methods=["POST"])
 def run_member(member_id):
-    session = get_session()
-    try:
-        m = session.query(Member).get(member_id)
+    with get_session() as session:
+        m = session.get(Member, member_id)
         if not m:
             flash("成员不存在", "danger")
             return redirect(url_for("task.list_tasks"))
         task_id = task_manager.run_member(m.id, m.email)
         flash(f"已启动任务：{m.email}", "success")
-    finally:
-        session.close()
     return redirect(url_for("task.list_tasks"))
 
 
 @bp.route("/run/parent/<int:parent_id>", methods=["POST"])
 def run_parent(parent_id):
-    session = get_session()
-    try:
-        p = session.query(Parent).get(parent_id)
+    with get_session() as session:
+        p = session.get(Parent, parent_id)
         if not p:
             flash("家长不存在", "danger")
             return redirect(url_for("task.list_tasks"))
@@ -65,8 +65,6 @@ def run_parent(parent_id):
             flash(f"家长 {p.email} 下没有待处理成员", "warning")
         else:
             flash(f"已启动 {len(task_ids)} 个并行任务：{p.email} 下所有待处理成员", "success")
-    finally:
-        session.close()
     return redirect(url_for("task.list_tasks"))
 
 

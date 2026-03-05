@@ -5,3 +5,4 @@ rich>=13.0.0
 pyotp>=2.9.0
 flask>=3.0.0
 requests>=2.31.0
+cryptography>=42.0.0

@@ -1,43 +1,78 @@
 {% extends "base.html" %}
-{% block title %}Antigravity 配置 - Google Family Bot{% endblock %}
+{% block title %}上号配置 - Google Family Bot{% endblock %}
 
 {% block extra_head %}
 <style>
     .config-card { border-left: 3px solid #0d6efd; }
     .form-label { font-weight: 500; }
     .help-text { font-size: 0.875rem; color: #6c757d; margin-top: 0.25rem; }
-    .readonly-field { background-color: #e9ecef; }
+    .service-section { display: none; }
+    .service-section.active { display: block; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0">Antigravity 配置</h4>
+    <h4 class="mb-0">上号配置</h4>
 </div>
 
 <div class="card config-card">
     <div class="card-body">
         <form method="POST" action="/config/save">
             <div class="row g-3">
-                <!-- Antigravity 配置（可编辑） -->
                 <div class="col-12">
-                    <h5 class="border-bottom pb-2 mb-3">Antigravity Manager 配置</h5>
+                    <h5 class="border-bottom pb-2 mb-3">服务类型</h5>
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">API 地址 <span class="text-danger">*</span></label>
-                    <input type="url" name="antigravity_api_url" class="form-control" 
-                           value="{{ config.antigravity_api_url }}" 
-                           placeholder="https://your-domain.com" required>
-                    <div class="help-text">Antigravity Manager 的部署地址</div>
+                    <label class="form-label">上号服务 <span class="text-danger">*</span></label>
+                    <select name="service_type" id="serviceType" class="form-select" onchange="toggleService()">
+                        <option value="antigravity_manager" {% if config.get('service_type', 'antigravity_manager') == 'antigravity_manager' %}selected{% endif %}>Antigravity Manager</option>
+                        <option value="gcli2api" {% if config.get('service_type') == 'gcli2api' %}selected{% endif %}>gcli2api</option>
+                    </select>
+                    <div class="help-text">选择要对接的上号服务</div>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">API Key <span class="text-danger">*</span></label>
-                    <input type="text" name="antigravity_api_key" class="form-control" 
-                           value="{{ config.antigravity_api_key }}" 
-                           placeholder="your-api-key" required>
-                    <div class="help-text">Antigravity Manager 的 API 密钥（通常是 UI 页面登录密码）</div>
+                <!-- Antigravity Manager 配置 -->
+                <div class="col-12 service-section" id="section-antigravity_manager">
+                    <h5 class="border-bottom pb-2 mb-3 mt-2">Antigravity Manager 配置</h5>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">API 地址</label>
+                            <input type="url" name="antigravity_api_url" class="form-control"
+                                   value="{{ config.get('antigravity_api_url', '') }}"
+                                   placeholder="https://your-domain.com">
+                            <div class="help-text">Antigravity Manager 的部署地址（不要带 /api 后缀）</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">API Key</label>
+                            <input type="text" name="antigravity_api_key" class="form-control"
+                                   value="{{ config.get('antigravity_api_key', '') }}"
+                                   placeholder="your-api-key">
+                            <div class="help-text">Antigravity Manager 的 API 密钥（通常是 UI 页面登录密码）</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- gcli2api 配置 -->
+                <div class="col-12 service-section" id="section-gcli2api">
+                    <h5 class="border-bottom pb-2 mb-3 mt-2">gcli2api 配置</h5>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">API 地址</label>
+                            <input type="url" name="gcli2api_url" class="form-control"
+                                   value="{{ config.get('gcli2api_url', '') }}"
+                                   placeholder="https://your-gcli2api-domain.com">
+                            <div class="help-text">gcli2api 的部署地址</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">访问密码</label>
+                            <input type="text" name="gcli2api_api_key" class="form-control"
+                                   value="{{ config.get('gcli2api_api_key', '') }}"
+                                   placeholder="your-access-key">
+                            <div class="help-text">gcli2api 的 Bearer Token 访问密码</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 说明 -->
@@ -45,9 +80,10 @@
                     <div class="alert alert-info">
                         <strong>使用说明：</strong>
                         <ul class="mb-0 mt-2">
-                            <li>配置好后，点击成员列表的 <strong>Antigravity</strong> 按钮即可自动完成授权并上传账号</li>
-                            <li>API 地址填写你的 Antigravity Manager 部署地址（不要带 /api/accounts 后缀）</li>
-                            <li>API Key 通常就是你登录 Antigravity Manager UI 页面的密码</li>
+                            <li>选择上号服务类型后，填写对应的配置信息</li>
+                            <li>配置好后，点击成员列表的 <strong>Antigravity</strong> 按钮即可自动完成授权并上号</li>
+                            <li><strong>Antigravity Manager</strong>：获取链接 <code>/api/auth/url</code>，提交回调 <code>/api/accounts/oauth/submit-code</code></li>
+                            <li><strong>gcli2api</strong>：获取链接 <code>/auth/start</code>，提交回调 <code>/auth/callback-url</code></li>
                         </ul>
                     </div>
                 </div>
@@ -61,4 +97,16 @@
         </form>
     </div>
 </div>
+
+<script>
+function toggleService() {
+    var type = document.getElementById('serviceType').value;
+    document.querySelectorAll('.service-section').forEach(function(el) {
+        el.classList.remove('active');
+    });
+    var target = document.getElementById('section-' + type);
+    if (target) target.classList.add('active');
+}
+toggleService();
+</script>
 {% endblock %}

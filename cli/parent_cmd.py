@@ -19,8 +19,7 @@ def parent_cli():
 @click.option("--max-members", default=5, help="最大成员数")
 def add_parent(email, nickname, max_members):
     """添加家长账号"""
-    session = get_session()
-    try:
+    with get_session() as session:
         existing = session.query(Parent).filter_by(email=email).first()
         if existing:
             console.print(f"[red]邮箱 {email} 已存在[/red]")
@@ -29,15 +28,12 @@ def add_parent(email, nickname, max_members):
         session.add(parent)
         session.commit()
         console.print(f"[green]家长添加成功: {email} (ID: {parent.id})[/green]")
-    finally:
-        session.close()
 
 
 @parent_cli.command("list")
 def list_parents():
     """列出所有家长"""
-    session = get_session()
-    try:
+    with get_session() as session:
         parents = session.query(Parent).all()
         if not parents:
             console.print("[yellow]暂无家长数据[/yellow]")
@@ -56,8 +52,6 @@ def list_parents():
                 p.created_at.strftime("%Y-%m-%d %H:%M") if p.created_at else "-"
             )
         console.print(table)
-    finally:
-        session.close()
 
 
 @parent_cli.command("delete")
@@ -65,9 +59,8 @@ def list_parents():
 @click.confirmation_option(prompt="确认删除该家长及其所有成员？")
 def delete_parent(parent_id):
     """删除家长（级联删除成员）"""
-    session = get_session()
-    try:
-        parent = session.query(Parent).get(parent_id)
+    with get_session() as session:
+        parent = session.get(Parent, parent_id)
         if not parent:
             console.print(f"[red]家长 ID {parent_id} 不存在[/red]")
             return
@@ -75,5 +68,3 @@ def delete_parent(parent_id):
         session.delete(parent)
         session.commit()
         console.print(f"[green]已删除家长: {email}[/green]")
-    finally:
-        session.close()

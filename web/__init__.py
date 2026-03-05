@@ -1,5 +1,6 @@
 import os
-from flask import Flask
+
+from flask import Flask, request, Response
 
 
 def _get_secret_key():
@@ -15,9 +16,33 @@ def _get_secret_key():
     return key
 
 
+def _check_auth(username, password):
+    from config import WEB_AUTH_USERNAME, WEB_AUTH_PASSWORD
+    return username == WEB_AUTH_USERNAME and password == WEB_AUTH_PASSWORD
+
+
+def _require_auth():
+    return Response(
+        "需要登录才能访问", 401,
+        {"WWW-Authenticate": 'Basic realm="Google Family Bot"'},
+    )
+
+
 def create_app():
     app = Flask(__name__)
     app.secret_key = _get_secret_key()
+
+    from config import WEB_AUTH_PASSWORD
+
+    if WEB_AUTH_PASSWORD:
+        @app.before_request
+        def auth_check():
+            # 静态文件不需要认证
+            if request.path.startswith("/static/"):
+                return None
+            auth = request.authorization
+            if not auth or not _check_auth(auth.username, auth.password):
+                return _require_auth()
 
     from web.routes.dashboard import bp as dashboard_bp
     from web.routes.parent import bp as parent_bp
@@ -30,5 +55,13 @@ def create_app():
     app.register_blueprint(member_bp, url_prefix="/member")
     app.register_blueprint(task_bp, url_prefix="/task")
     app.register_blueprint(config_bp, url_prefix="/config")
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return "页面不存在", 404
+
+    @app.errorhandler(500)
+    def server_error(e):
+        return "服务器内部错误", 500
 
     return app

@@ -1,4 +1,9 @@
 {
+    "service_type": "antigravity_manager",
+
     "antigravity_api_url": "https://你的域名",
-    "antigravity_api_key": "你的 ui界面密码"
+    "antigravity_api_key": "你的 ui界面密码",
+
+    "gcli2api_url": "https://你的gcli2api地址",
+    "gcli2api_api_key": "你的gcli2api访问密码"
 }

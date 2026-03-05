@@ -1,4 +1,10 @@
-import traceback
+import logging
+import sys
+
+from config import setup_logging, WEB_DEBUG, WEB_HOST, WEB_PORT
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 try:
     from db.database import init_db
@@ -7,7 +13,8 @@ try:
     if __name__ == "__main__":
         init_db()
         app = create_app()
-        print("启动 Web 服务: http://localhost:5000")
-        app.run(host="0.0.0.0", port=5000, debug=True)
-except Exception as e:
-    traceback.print_exc()
+        logger.info("启动 Web 服务: http://%s:%d", WEB_HOST, WEB_PORT)
+        app.run(host=WEB_HOST, port=WEB_PORT, debug=WEB_DEBUG)
+except Exception:
+    logger.exception("Web 服务启动失败")
+    sys.exit(1)

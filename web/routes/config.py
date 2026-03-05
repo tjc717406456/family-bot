@@ -1,22 +1,35 @@
 import json
+import logging
 import os
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash
+from config import BASE_DIR
 
 bp = Blueprint("config", __name__)
+logger = logging.getLogger(__name__)
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "antigravity_config.json")
+CONFIG_PATH = os.path.join(BASE_DIR, "antigravity_config.json")
+
+_DEFAULT_CONFIG = {
+    "service_type": "antigravity_manager",
+    "antigravity_api_url": "",
+    "antigravity_api_key": "",
+    "gcli2api_url": "",
+    "gcli2api_api_key": "",
+}
 
 
 def _load_config():
     """加载配置文件"""
     if not os.path.exists(CONFIG_PATH):
-        return {
-            "antigravity_api_url": "",
-            "antigravity_api_key": "",
-        }
-    
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        return dict(_DEFAULT_CONFIG)
+
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        logger.warning("配置文件读取失败，使用默认值: %s", e)
+        return dict(_DEFAULT_CONFIG)
 
 
 def _save_config(config):
@@ -34,17 +47,20 @@ def index():
 @bp.route("/save", methods=["POST"])
 def save():
     config = _load_config()
-    
-    # 更新可编辑的配置项
+
+    config["service_type"] = request.form.get("service_type", "antigravity_manager").strip()
     config["antigravity_api_url"] = request.form.get("antigravity_api_url", "").strip()
     config["antigravity_api_key"] = request.form.get("antigravity_api_key", "").strip()
-    
+    config["gcli2api_url"] = request.form.get("gcli2api_url", "").strip()
+    config["gcli2api_api_key"] = request.form.get("gcli2api_api_key", "").strip()
+
     try:
         _save_config(config)
         from automation.oauth_utils import reload_config
         reload_config()
         flash("配置已保存", "success")
     except Exception as e:
+        logger.exception("保存配置失败")
         flash(f"保存失败: {e}", "danger")
-    
+
     return redirect(url_for("config.index"))

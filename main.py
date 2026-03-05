@@ -1,8 +1,12 @@
 import click
+
+from config import setup_logging
 from db.database import init_db
 from cli.parent_cmd import parent_cli
 from cli.member_cmd import member_cli
 from cli.auto_cmd import run_cli, status_cli
+
+setup_logging()
 
 
 @click.group()

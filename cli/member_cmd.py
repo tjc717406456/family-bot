@@ -28,9 +28,8 @@ def member_cli():
 @click.option("--remark", default="", help="备注")
 def add_member(parent_id, email, password, totp_secret, remark):
     """添加成员账号"""
-    session = get_session()
-    try:
-        parent = session.query(Parent).get(parent_id)
+    with get_session() as session:
+        parent = session.get(Parent, parent_id)
         if not parent:
             console.print(f"[red]家长 ID {parent_id} 不存在[/red]")
             return
@@ -48,16 +47,13 @@ def add_member(parent_id, email, password, totp_secret, remark):
         session.add(member)
         session.commit()
         console.print(f"[green]成员添加成功: {email} (ID: {member.id}), 归属家长: {parent.email}[/green]")
-    finally:
-        session.close()
 
 
 @member_cli.command("list")
 @click.option("--parent-id", type=int, default=None, help="按家长 ID 筛选")
 def list_members(parent_id):
     """列出成员"""
-    session = get_session()
-    try:
+    with get_session() as session:
         query = session.query(Member)
         if parent_id:
             query = query.filter_by(parent_id=parent_id)
@@ -85,8 +81,6 @@ def list_members(parent_id):
                 m.updated_at.strftime("%Y-%m-%d %H:%M") if m.updated_at else "-"
             )
         console.print(table)
-    finally:
-        session.close()
 
 
 @member_cli.command("delete")
@@ -94,9 +88,8 @@ def list_members(parent_id):
 @click.confirmation_option(prompt="确认删除该成员？")
 def delete_member(member_id):
     """删除成员"""
-    session = get_session()
-    try:
-        member = session.query(Member).get(member_id)
+    with get_session() as session:
+        member = session.get(Member, member_id)
         if not member:
             console.print(f"[red]成员 ID {member_id} 不存在[/red]")
             return
@@ -104,5 +97,3 @@ def delete_member(member_id):
         session.delete(member)
         session.commit()
         console.print(f"[green]已删除成员: {email}[/green]")
-    finally:
-        session.close()

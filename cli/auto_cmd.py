@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from datetime import datetime
 
@@ -6,22 +7,23 @@ import click
 from playwright.async_api import async_playwright
 from rich.console import Console
 
-from config import BROWSER_HEADLESS, BROWSER_SLOW_MO, BROWSER_CHANNEL, BROWSER_USER_DATA_DIR, SCREENSHOT_DIR
+from config import BROWSER_HEADLESS, BROWSER_SLOW_MO, BROWSER_CHANNEL, BROWSER_USER_DATA_DIR
 from db.database import get_session
 from db.models import Member
 
 from automation.google_login import google_login
 from automation.gemini_activate import activate_gemini
 from automation.family_accept import accept_family_invite
+from automation.utils import take_screenshot, mark_failed
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 async def run_member_flow(member_id: int):
     """对单个成员执行全流程"""
-    session = get_session()
-    try:
-        member = session.query(Member).get(member_id)
+    with get_session() as session:
+        member = session.get(Member, member_id)
         if not member:
             console.print(f"[red]成员 ID {member_id} 不存在[/red]")
             return
@@ -32,7 +34,6 @@ async def run_member_flow(member_id: int):
         console.print(f"\n[bold cyan]===== 开始处理: {member.email} =====[/bold cyan]")
 
         async with async_playwright() as p:
-            # 每个成员独立 Chrome profile，互不干扰
             member_profile_dir = os.path.join(BROWSER_USER_DATA_DIR, f"member_{member.id}")
             os.makedirs(member_profile_dir, exist_ok=True)
 
@@ -43,7 +44,6 @@ async def run_member_flow(member_id: int):
                 channel=BROWSER_CHANNEL,
                 viewport={"width": 1280, "height": 800},
                 locale="en-US",
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--disable-infobars",
@@ -53,32 +53,29 @@ async def run_member_flow(member_id: int):
             page = context.pages[0] if context.pages else await context.new_page()
 
             try:
-                # Step 1: 登录
                 login_ok = await google_login(
                     page, member.email, member.password, member.totp_secret or ""
                 )
                 if not login_ok:
-                    _fail(session, member, "Google 登录失败")
-                    await _screenshot(page, member, "login_failed")
+                    mark_failed(session, member, "Google 登录失败")
+                    await take_screenshot(page, member, "login_failed")
                     return
 
-                # Step 2: 开通 Gemini（pending 状态才执行）
                 if member.status == "pending":
                     gemini_ok = await activate_gemini(page)
                     if not gemini_ok:
-                        _fail(session, member, "Gemini 开通失败")
-                        await _screenshot(page, member, "gemini_failed")
+                        mark_failed(session, member, "Gemini 开通失败")
+                        await take_screenshot(page, member, "gemini_failed")
                         return
                     member.status = "gemini_done"
                     member.updated_at = datetime.now()
                     session.commit()
-                    console.print(f"[blue]状态更新: gemini_done[/blue]")
+                    console.print("[blue]状态更新: gemini_done[/blue]")
 
-                # Step 3: 接受家庭组邀请
                 accept_ok = await accept_family_invite(page)
                 if not accept_ok:
-                    _fail(session, member, "接受家庭组邀请失败")
-                    await _screenshot(page, member, "accept_failed")
+                    mark_failed(session, member, "接受家庭组邀请失败")
+                    await take_screenshot(page, member, "accept_failed")
                     return
 
                 member.status = "joined"
@@ -88,33 +85,11 @@ async def run_member_flow(member_id: int):
                 console.print(f"[bold green]===== {member.email} 全流程完成 =====[/bold green]\n")
 
             except Exception as e:
-                _fail(session, member, str(e))
-                await _screenshot(page, member, "exception")
-                console.print(f"[red]异常: {e}[/red]")
+                mark_failed(session, member, str(e))
+                await take_screenshot(page, member, "exception")
+                logger.exception("成员流程异常: %s", member.email)
             finally:
                 await context.close()
-    finally:
-        session.close()
-
-
-def _fail(session, member: Member, reason: str):
-    """标记成员失败"""
-    member.status = "failed"
-    member.error_msg = reason
-    member.updated_at = datetime.now()
-    session.commit()
-    console.print(f"[red]失败: {member.email} - {reason}[/red]")
-
-
-async def _screenshot(page, member: Member, tag: str):
-    """截图保存"""
-    filename = f"{member.id}_{member.email}_{tag}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-    path = os.path.join(SCREENSHOT_DIR, filename)
-    try:
-        await page.screenshot(path=path)
-        console.print(f"[dim]截图已保存: {path}[/dim]")
-    except Exception:
-        pass
 
 
 @click.command("run")
@@ -126,8 +101,7 @@ def run_cli(member_id, parent_id, run_all):
     if member_id:
         asyncio.run(run_member_flow(member_id))
     elif parent_id:
-        session = get_session()
-        try:
+        with get_session() as session:
             members = session.query(Member).filter(
                 Member.parent_id == parent_id,
                 Member.status.in_(["pending", "gemini_done"])
@@ -137,13 +111,10 @@ def run_cli(member_id, parent_id, run_all):
                 return
             console.print(f"[cyan]找到 {len(members)} 个待处理成员[/cyan]")
             ids = [m.id for m in members]
-        finally:
-            session.close()
         for mid in ids:
             asyncio.run(run_member_flow(mid))
     elif run_all:
-        session = get_session()
-        try:
+        with get_session() as session:
             members = session.query(Member).filter(
                 Member.status.in_(["pending", "gemini_done"])
             ).all()
@@ -152,8 +123,6 @@ def run_cli(member_id, parent_id, run_all):
                 return
             console.print(f"[cyan]找到 {len(members)} 个待处理成员[/cyan]")
             ids = [m.id for m in members]
-        finally:
-            session.close()
         for mid in ids:
             asyncio.run(run_member_flow(mid))
     else:
@@ -166,8 +135,7 @@ def status_cli():
     from rich.table import Table
     from db.models import Parent
 
-    session = get_session()
-    try:
+    with get_session() as session:
         parents = session.query(Parent).all()
         if not parents:
             console.print("[yellow]暂无数据[/yellow]")
@@ -195,5 +163,3 @@ def status_cli():
                 str(total)
             )
         console.print(table)
-    finally:
-        session.close()

@@ -50,6 +50,9 @@
                 </select>
             </form>
         </div>
+        <div class="col-auto">
+            <a href="/member/export{% if current_parent_id %}?parent_id={{ current_parent_id }}{% endif %}" class="btn btn-outline-primary btn-sm">导出</a>
+        </div>
     </div>
 </div>
 
@@ -140,7 +143,7 @@
     <table class="table table-bordered table-hover bg-white mb-0">
         <thead>
             <tr class="table-dark">
-                <th>ID</th>
+                <th>序号</th>
                 <th>邮箱</th>
                 <th>所属家长</th>
                 <th>状态</th>
@@ -154,7 +157,7 @@
         <tbody>
             {% for m in members %}
             <tr>
-                <td>{{ m.id }}</td>
+                <td>{{ loop.index }}</td>
                 <td style="text-align:left;">
                     <code style="cursor:pointer;text-decoration:underline;color:#0d6efd;" data-bs-toggle="modal" data-bs-target="#detailModal{{ m.id }}">{{ m.email }}</code>
                 </td>
@@ -261,7 +264,16 @@
                     </tr>
                     <tr>
                         <td class="text-muted">家长</td>
-                        <td>{{ m.parent_email }}</td>
+                        <td>
+                            <form method="POST" action="/member/change_parent/{{ m.id }}" class="d-flex align-items-center gap-2">
+                                <select name="parent_id" class="form-select form-select-sm" style="width:220px;">
+                                    {% for p in parents %}
+                                    <option value="{{ p.id }}" {% if p.id == m.parent_id %}selected{% endif %}>{{ p.email }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="copy-btn">保存</button>
+                            </form>
+                        </td>
                     </tr>
                     <tr>
                         <td class="text-muted">状态</td>

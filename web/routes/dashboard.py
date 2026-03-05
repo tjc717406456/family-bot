@@ -1,37 +1,53 @@
+import logging
+
 from flask import Blueprint, render_template
+from sqlalchemy import func, case
 from db.database import get_session
 from db.models import Parent, Member
 
 bp = Blueprint("dashboard", __name__)
+logger = logging.getLogger(__name__)
+
+STATUSES = ("pending", "gemini_done", "joined", "failed")
 
 
 @bp.route("/")
 def index():
-    session = get_session()
-    try:
-        parents = session.query(Parent).all()
-        # 统计各状态总数
-        total_counts = {"pending": 0, "gemini_done": 0, "joined": 0, "failed": 0}
+    with get_session() as session:
+        # 聚合查询代替 N+1 遍历
+        rows = (
+            session.query(
+                Parent.id,
+                Parent.email,
+                Parent.nickname,
+                Parent.max_members,
+                *[
+                    func.count(case((Member.status == s, 1))).label(s)
+                    for s in STATUSES
+                ],
+            )
+            .outerjoin(Member)
+            .group_by(Parent.id)
+            .all()
+        )
+
+        total_counts = {s: 0 for s in STATUSES}
         parent_stats = []
-        for p in parents:
-            counts = {"pending": 0, "gemini_done": 0, "joined": 0, "failed": 0}
-            for m in p.members:
-                if m.status in counts:
-                    counts[m.status] += 1
-            for k in total_counts:
-                total_counts[k] += counts[k]
+        for row in rows:
+            counts = {s: getattr(row, s) for s in STATUSES}
+            for s in STATUSES:
+                total_counts[s] += counts[s]
             parent_stats.append({
-                "id": p.id,
-                "email": p.email,
-                "nickname": p.nickname or "-",
-                "max_members": p.max_members,
+                "id": row.id,
+                "email": row.email,
+                "nickname": row.nickname or "-",
+                "max_members": row.max_members,
                 "counts": counts,
                 "total": sum(counts.values()),
             })
+
         return render_template(
             "dashboard.html",
             total=total_counts,
             parents=parent_stats,
         )
-    finally:
-        session.close()

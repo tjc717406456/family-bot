@@ -1,5 +1,7 @@
+import logging
+
 import pyotp
-from playwright.async_api import Page, BrowserContext
+from playwright.async_api import Page
 from rich.console import Console
 from config import GOOGLE_SIGNIN_URL, LOGIN_TIMEOUT
 from automation.wait_utils import (
@@ -8,6 +10,7 @@ from automation.wait_utils import (
 )
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 async def google_login(page: Page, email: str, password: str, totp_secret: str = "") -> bool:
@@ -16,7 +19,7 @@ async def google_login(page: Page, email: str, password: str, totp_secret: str =
     每个成员用独立 Chrome profile，不存在账号冲突
     """
     console.print(f"[cyan]开始登录: {email}[/cyan]")
-    console.print(f"[dim]请求地址: {GOOGLE_SIGNIN_URL}[/dim]")
+    logger.info("Google 登录开始: %s", email)
 
     await page.goto(GOOGLE_SIGNIN_URL, wait_until="domcontentloaded", timeout=60000)
     await wait_for_networkidle(page, timeout=8000)
@@ -26,17 +29,19 @@ async def google_login(page: Page, email: str, password: str, totp_secret: str =
         console.print(f"[green]已有登录态，跳过登录: {email}[/green]")
         return True
 
-    # 填入邮箱
     try:
         email_input = page.locator('input[type="email"]')
         await email_input.wait_for(state="visible", timeout=10000)
         await email_input.fill(email)
         console.print(f"[dim]已填入邮箱: {email}[/dim]")
     except Exception:
-        console.print(f"[green]已有登录态，跳过登录: {email}[/green]")
-        return True
+        # 检查当前 URL 确认是否真的已登录
+        if "accounts.google.com/signin" not in page.url:
+            console.print(f"[green]已有登录态，跳过登录: {email}[/green]")
+            return True
+        logger.warning("邮箱输入框未找到且未确认登录态: %s", page.url)
+        return False
 
-    # 点击下一步，等密码框出现
     await page.locator("#identifierNext").click()
 
     password_input = page.locator('input[name="Passwd"]')
@@ -44,7 +49,6 @@ async def google_login(page: Page, email: str, password: str, totp_secret: str =
     await password_input.fill(password)
     console.print("[dim]已填入密码[/dim]")
 
-    # 点击下一步，等待 URL 变化或 2FA 框出现
     old_url = page.url
     await page.locator("#passwordNext").click()
 
@@ -54,7 +58,7 @@ async def google_login(page: Page, email: str, password: str, totp_secret: str =
             await totp_input.wait_for(state="visible", timeout=8000)
             totp = pyotp.TOTP(totp_secret)
             code = totp.now()
-            console.print(f"[dim]生成 TOTP 验证码: {code}[/dim]")
+            logger.debug("生成 TOTP 验证码")
             await totp_input.fill(code)
             await click_and_wait_nav(page, page.locator("#totpNext"), timeout=8000)
         except Exception:
@@ -98,5 +102,5 @@ async def google_login(page: Page, email: str, password: str, totp_secret: str =
         if "accounts.google.com/signin" not in current_url:
             console.print(f"[green]登录成功: {email} (当前页面: {current_url})[/green]")
             return True
-        console.print(f"[red]登录可能失败，当前页面: {current_url}[/red]")
+        logger.warning("登录可能失败: %s, 当前页面: %s", email, current_url)
         return False
