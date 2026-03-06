@@ -39,7 +39,7 @@ def _extract_oauth_url(data) -> str:
     if isinstance(data, str):
         return data
     if isinstance(data, dict):
-        url = data.get("url") or data.get("authUrl") or data.get("oauth_url")
+        url = data.get("url") or data.get("authUrl") or data.get("oauth_url") or data.get("auth_url")
         if not url and "data" in data:
             inner = data["data"]
             if isinstance(inner, str):
@@ -51,7 +51,9 @@ def _extract_oauth_url(data) -> str:
 
 
 def _safe_json(resp) -> dict:
-    """安全解析 JSON 响应"""
+    """安全解析 JSON 响应，空响应视为成功"""
+    if not resp.text or not resp.text.strip():
+        return {"status": "ok", "message": "服务端返回空响应（已接受）"}
     try:
         return resp.json()
     except (ValueError, requests.exceptions.JSONDecodeError):

@@ -11,6 +11,11 @@
     .error-text { font-size: .78rem; }
     .ops-group { display: flex; gap: 4px; flex-wrap: wrap; }
     .add-form-card { border-left: 3px solid #10b981; }
+    .table th, .table td { font-size: .78rem; padding: 8px 6px; white-space: nowrap; }
+    .table td:nth-child(2) { white-space: normal; word-break: break-all; max-width: 200px; }
+    .table td:nth-child(5), .table td:nth-child(6) { white-space: normal; max-width: 120px; }
+    .table td:nth-child(7) { min-width: 80px; }
+    .btn-xs { font-size: .68rem !important; padding: 2px 6px !important; }
 </style>
 {% endblock %}
 
@@ -123,7 +128,6 @@
 {% if members %}
 <div class="card">
     <div class="card-body p-0">
-        <div class="table-responsive">
             <table class="table table-hover mb-0">
                 <thead>
                     <tr>
@@ -212,7 +216,6 @@
                     {% endfor %}
                 </tbody>
             </table>
-        </div>
     </div>
 </div>
 

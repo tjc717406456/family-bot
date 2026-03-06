@@ -111,9 +111,11 @@ async def _handle_oauth_flow(page, member):
                 await wait_for_url_change(page, current_url, timeout=8000)
                 continue
 
-            if "signin/oauth/consent" in current_url or "oauth/consent" in current_url:
-                console.print("[dim]检测到 OAuth 授权确认页面[/dim]")
+            if "firstparty/nativeapp" in current_url or "signin/oauth/consent" in current_url or "oauth/consent" in current_url:
+                console.print("[dim]检测到 OAuth 授权/确认页面[/dim]")
                 allowed = await _click_allow(page)
+                if not allowed:
+                    allowed = await _click_sign_in(page)
                 if allowed:
                     await wait_for_url_change(page, current_url, timeout=10000)
                     continue
@@ -125,10 +127,12 @@ async def _handle_oauth_flow(page, member):
             if await _is_choose_account_page(page):
                 console.print(f"[dim]检测到选择账号页面，选择: {member.email}[/dim]")
                 selected = await _select_account(page, member.email)
-                if not selected:
-                    console.print(f"[red]未找到账号: {member.email}[/red]")
-                    return None
-                await wait_for_url_change(page, current_url, timeout=8000)
+                if selected:
+                    await wait_for_url_change(page, current_url, timeout=8000)
+                    continue
+                console.print("[dim]尝试在新登录页面输入凭据...[/dim]")
+                await _handle_login_form(page, member)
+                await wait_for_url_change(page, current_url, timeout=10000)
                 continue
 
             if member.totp_secret:
@@ -260,7 +264,7 @@ async def _is_choose_account_page(page) -> bool:
 
 
 async def _select_account(page, email: str) -> bool:
-    """在 Choose an account 页面按 email 匹配点击"""
+    """在 Choose an account 页面按 email 匹配点击，找不到则点击 Use another account"""
     for attr in ["data-identifier", "data-email"]:
         try:
             account = page.locator(f'[{attr}="{email}"]')
@@ -289,8 +293,77 @@ async def _select_account(page, email: str) -> bool:
     except Exception:
         pass
 
-    console.print(f"[red]未找到账号: {email}[/red]")
+    console.print(f"[yellow]账号列表中未找到 {email}，尝试点击 Use another account...[/yellow]")
+    if await _click_use_another_account(page):
+        return True
+
+    console.print(f"[red]未找到账号且无法切换: {email}[/red]")
     return False
+
+
+async def _click_use_another_account(page) -> bool:
+    """点击 'Use another account' 按钮进入登录页面"""
+    selectors = [
+        'li[data-identifier=""]',
+        '[data-identifier=""]',
+        'div:has-text("Use another account")',
+        'div:has-text("使用其他帐号")',
+        'div:has-text("使用其他账号")',
+    ]
+    for sel in selectors:
+        try:
+            el = page.locator(sel).first
+            if await el.is_visible():
+                await el.click()
+                console.print("[dim]已点击 Use another account[/dim]")
+                return True
+        except Exception:
+            continue
+
+    try:
+        clicked = await page.evaluate('''() => {
+            const items = document.querySelectorAll('li, div[role="link"], div[tabindex]');
+            for (const el of items) {
+                const text = (el.innerText || '').toLowerCase();
+                if (text.includes('use another account') || text.includes('使用其他帐号') || text.includes('使用其他账号')) {
+                    el.click();
+                    return true;
+                }
+            }
+            return false;
+        }''')
+        if clicked:
+            console.print("[dim]已点击 Use another account(JS)[/dim]")
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+async def _handle_login_form(page, member):
+    """在 OAuth 流程中处理 Google 登录表单（输入邮箱、密码）"""
+    from utils.crypto import decrypt_safe
+
+    try:
+        email_input = page.locator('input[type="email"]')
+        await email_input.wait_for(state="visible", timeout=8000)
+        await email_input.fill(member.email)
+        console.print(f"[dim]已填入邮箱: {member.email}[/dim]")
+
+        await page.locator("#identifierNext").click()
+
+        password_input = page.locator('input[name="Passwd"]')
+        await password_input.wait_for(state="visible", timeout=10000)
+        plain_pwd = decrypt_safe(member.password) if member.password else ""
+        await password_input.fill(plain_pwd)
+        console.print("[dim]已填入密码[/dim]")
+
+        old_url = page.url
+        await page.locator("#passwordNext").click()
+        await wait_for_url_change(page, old_url, timeout=10000)
+    except Exception:
+        logger.warning("OAuth 登录表单处理失败", exc_info=True)
 
 
 async def _handle_2fa(page, totp_secret: str):
@@ -301,9 +374,13 @@ async def _handle_2fa(page, totp_secret: str):
             totp = pyotp.TOTP(totp_secret)
             code = totp.now()
             logger.debug("生成 TOTP 验证码")
+            old_url = page.url
             await totp_input.fill(code)
-            await page.locator("#totpNext").click()
-            await wait_for_url_change(page, page.url, timeout=8000)
+            try:
+                await page.locator("#totpNext").click(no_wait_after=True)
+            except Exception:
+                logger.debug("totpNext 点击后页面已导航，视为成功")
+            await wait_for_url_change(page, old_url, timeout=10000)
     except Exception:
         logger.warning("2FA 处理失败", exc_info=True)
 

@@ -63,57 +63,75 @@ async def activate_gemini(page: Page) -> bool:
     random_name = random.choice(FIRST_NAMES)
     name_filled = False
 
-    # 策略1：点击 label 聚焦
+    # 策略1：通过 placeholder 精确定位 name 输入框
     try:
-        label = page.locator('text="Give your Gem a name"').first
-        if await label.is_visible():
-            await label.click()
-            await page.wait_for_timeout(500)
-            await page.keyboard.type(random_name)
+        name_input = page.locator(
+            'input[placeholder*="name" i], '
+            'input[placeholder*="Gem" i], '
+            'input[aria-label*="name" i], '
+            'input[aria-label*="Gem" i]'
+        ).first
+        if await name_input.is_visible(timeout=5000):
+            await name_input.click()
+            await name_input.fill(random_name)
             name_filled = True
-            console.print(f"[dim]填入 Gem 名字 (点击label): {random_name}[/dim]")
+            console.print(f"[dim]填入 Gem 名字 (placeholder定位): {random_name}[/dim]")
     except Exception:
         pass
 
-    # 策略2：textbox role
+    # 策略2：点击 label 文字后用键盘输入
     if not name_filled:
         try:
-            first_textbox = page.get_by_role("textbox").first
-            await first_textbox.wait_for(state="visible", timeout=5000)
-            await first_textbox.fill(random_name)
-            name_filled = True
-            console.print(f"[dim]填入 Gem 名字 (首个textbox): {random_name}[/dim]")
+            label = page.locator('text="Give your Gem a name"').first
+            if await label.is_visible():
+                await label.click()
+                await page.wait_for_timeout(500)
+                active = await page.evaluate('() => document.activeElement?.tagName')
+                if active and active.lower() in ('input', 'textarea'):
+                    await page.keyboard.type(random_name)
+                    name_filled = True
+                    console.print(f"[dim]填入 Gem 名字 (点击label): {random_name}[/dim]")
         except Exception:
             pass
 
-    # 策略3：JS 注入
+    # 策略3：JS 精确定位 name 输入框（排除 description/instructions）
     if not name_filled:
         try:
             found = await page.evaluate('''(name) => {
-                const els = document.querySelectorAll('input, textarea, [contenteditable="true"]');
-                for (const el of els) {
-                    if (el.offsetParent !== null && el.getBoundingClientRect().height > 0) {
+                const inputs = document.querySelectorAll('input, textarea, [contenteditable="true"]');
+                for (const el of inputs) {
+                    if (el.offsetParent === null || el.getBoundingClientRect().height <= 0) continue;
+                    const ph = (el.placeholder || '').toLowerCase();
+                    const label = (el.getAttribute('aria-label') || '').toLowerCase();
+                    if (ph.includes('name') || ph.includes('gem') || label.includes('name') || label.includes('gem')) {
                         el.focus();
-                        const nativeSetter = Object.getOwnPropertyDescriptor(
-                            window.HTMLInputElement.prototype, 'value'
-                        )?.set || Object.getOwnPropertyDescriptor(
-                            window.HTMLTextAreaElement.prototype, 'value'
-                        )?.set;
-                        if (nativeSetter) {
-                            nativeSetter.call(el, name);
-                        } else {
-                            el.value = name;
-                        }
+                        el.value = name;
                         el.dispatchEvent(new Event('input', { bubbles: true }));
                         el.dispatchEvent(new Event('change', { bubbles: true }));
-                        return el.tagName + '.' + (el.className || '').substring(0, 60);
+                        return 'matched: ' + (ph || label);
                     }
+                }
+                // 兜底：取页面上最靠上的可见 input（y 坐标最小的）
+                let topEl = null, topY = Infinity;
+                for (const el of inputs) {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.height > 0 && el.offsetParent !== null && rect.top < topY) {
+                        topY = rect.top;
+                        topEl = el;
+                    }
+                }
+                if (topEl) {
+                    topEl.focus();
+                    topEl.value = name;
+                    topEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    topEl.dispatchEvent(new Event('change', { bubbles: true }));
+                    return 'topmost: ' + topEl.tagName;
                 }
                 return '';
             }''', random_name)
             if found:
                 name_filled = True
-                console.print(f"[dim]填入 Gem 名字 (JS注入 {found}): {random_name}[/dim]")
+                console.print(f"[dim]填入 Gem 名字 (JS {found}): {random_name}[/dim]")
         except Exception as e:
             logger.debug("JS 注入失败: %s", e)
 
