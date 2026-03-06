@@ -246,20 +246,16 @@
                         <td class="text-muted">密码</td>
                         <td>
                             <code id="pwd_{{ m.id }}">••••••••</code>
-                            <button class="copy-btn ms-2" onclick="togglePwd('pwd_{{ m.id }}', '{{ m.password|e }}', this)">显示</button>
-                            <button class="copy-btn ms-2" data-copy="{{ m.password|e }}" onclick="copyText(this.dataset.copy, this)">复制</button>
+                            <button class="copy-btn ms-2" onclick="toggleSecret({{ m.id }}, 'pwd_{{ m.id }}', 'password', this)">显示</button>
+                            <button class="copy-btn ms-2" onclick="copySecret({{ m.id }}, 'password', this)">复制</button>
                         </td>
                     </tr>
                     <tr>
                         <td class="text-muted">2FA 密钥</td>
                         <td>
-                            {% if m.totp_secret %}
                             <code id="totp_{{ m.id }}">••••••••</code>
-                            <button class="copy-btn ms-2" onclick="togglePwd('totp_{{ m.id }}', '{{ m.totp_secret|e }}', this)">显示</button>
-                            <button class="copy-btn ms-2" data-copy="{{ m.totp_secret|e }}" onclick="copyText(this.dataset.copy, this)">复制</button>
-                            {% else %}
-                            <span class="text-muted">未设置</span>
-                            {% endif %}
+                            <button class="copy-btn ms-2" onclick="toggleSecret({{ m.id }}, 'totp_{{ m.id }}', 'totp_secret', this)">显示</button>
+                            <button class="copy-btn ms-2" onclick="copySecret({{ m.id }}, 'totp_secret', this)">复制</button>
                         </td>
                     </tr>
                     <tr>
@@ -320,6 +316,15 @@
 {% endif %}
 
 <script>
+var _secretCache = {};
+
+function _fetchSecret(memberId) {
+    if (_secretCache[memberId]) return Promise.resolve(_secretCache[memberId]);
+    return fetch('/member/secret/' + memberId)
+        .then(function(r) { return r.json(); })
+        .then(function(data) { _secretCache[memberId] = data; return data; });
+}
+
 function confirmRun() {
     return confirm('请确认已用主号发送了家庭组邀请邮件！\n\n点击「确定」继续执行，点击「取消」停止任务。');
 }
@@ -328,17 +333,37 @@ function confirmAntigravity() {
     return confirm('请确认该成员是否已经加入家庭组？\n\n点击「确定」将自动生成 OAuth 链接并执行，点击「取消」停止任务。');
 }
 
-function togglePwd(elId, realValue, btn) {
+function toggleSecret(memberId, elId, field, btn) {
     var el = document.getElementById(elId);
     if (el.dataset.shown === '1') {
         el.textContent = '••••••••';
         el.dataset.shown = '';
         btn.textContent = '显示';
     } else {
-        el.textContent = realValue;
-        el.dataset.shown = '1';
-        btn.textContent = '隐藏';
+        _fetchSecret(memberId).then(function(data) {
+            el.textContent = data[field] || '(空)';
+            el.dataset.shown = '1';
+            btn.textContent = '隐藏';
+        });
     }
+}
+
+function copySecret(memberId, field, btn) {
+    _fetchSecret(memberId).then(function(data) {
+        navigator.clipboard.writeText(data[field] || '').then(function() {
+            var orig = btn.innerHTML;
+            btn.innerHTML = '已复制';
+            btn.style.background = '#198754';
+            btn.style.borderColor = '#198754';
+            btn.style.color = '#fff';
+            setTimeout(function() {
+                btn.innerHTML = orig;
+                btn.style.background = '';
+                btn.style.borderColor = '';
+                btn.style.color = '';
+            }, 1500);
+        });
+    });
 }
 
 function copyText(text, btn) {

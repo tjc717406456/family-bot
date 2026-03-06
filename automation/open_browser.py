@@ -1,15 +1,13 @@
 import logging
-import os
 
 from playwright.async_api import async_playwright
 from rich.console import Console
 
-from config import (
-    BROWSER_CHANNEL, BROWSER_HEADLESS, BROWSER_SLOW_MO, BROWSER_USER_DATA_DIR,
-)
+from automation.browser import launch_member_context
 from automation.google_login import google_login
 from db.database import get_session
 from db.models import Member
+from utils.crypto import decrypt_safe
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -22,28 +20,14 @@ async def open_browser_for_member(member_id: int):
         if not member:
             console.print(f"[red]成员 ID {member_id} 不存在[/red]")
             return False
-        email, password, totp_secret = member.email, member.password, member.totp_secret or ""
-
-    profile_dir = os.path.join(BROWSER_USER_DATA_DIR, f"member_{member_id}")
-    os.makedirs(profile_dir, exist_ok=True)
+        email = member.email
+        password = decrypt_safe(member.password)
+        totp_secret = decrypt_safe(member.totp_secret) if member.totp_secret else ""
 
     console.print(f"[cyan]打开浏览器: {email}[/cyan]")
 
     async with async_playwright() as p:
-        context = await p.chromium.launch_persistent_context(
-            user_data_dir=profile_dir,
-            headless=BROWSER_HEADLESS,
-            slow_mo=BROWSER_SLOW_MO,
-            channel=BROWSER_CHANNEL,
-            viewport={"width": 1280, "height": 800},
-            locale="en-US",
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-infobars",
-                "--no-first-run",
-            ],
-        )
-        page = context.pages[0] if context.pages else await context.new_page()
+        context, page = await launch_member_context(p, member_id)
         await google_login(page, email, password, totp_secret)
         console.print(f"[green]浏览器已就绪，等待用户关闭: {email}[/green]")
         await context.wait_for_event("close", timeout=0)

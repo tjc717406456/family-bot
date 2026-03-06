@@ -1,16 +1,16 @@
 import asyncio
 import logging
-import os
 from datetime import datetime
 
 import click
 from playwright.async_api import async_playwright
 from rich.console import Console
 
-from config import BROWSER_HEADLESS, BROWSER_SLOW_MO, BROWSER_CHANNEL, BROWSER_USER_DATA_DIR
 from db.database import get_session
 from db.models import Member
+from utils.crypto import decrypt_safe
 
+from automation.browser import launch_member_context
 from automation.google_login import google_login
 from automation.gemini_activate import activate_gemini
 from automation.family_accept import accept_family_invite
@@ -34,27 +34,13 @@ async def run_member_flow(member_id: int):
         console.print(f"\n[bold cyan]===== 开始处理: {member.email} =====[/bold cyan]")
 
         async with async_playwright() as p:
-            member_profile_dir = os.path.join(BROWSER_USER_DATA_DIR, f"member_{member.id}")
-            os.makedirs(member_profile_dir, exist_ok=True)
-
-            context = await p.chromium.launch_persistent_context(
-                user_data_dir=member_profile_dir,
-                headless=BROWSER_HEADLESS,
-                slow_mo=BROWSER_SLOW_MO,
-                channel=BROWSER_CHANNEL,
-                viewport={"width": 1280, "height": 800},
-                locale="en-US",
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-infobars",
-                    "--no-first-run",
-                ],
-            )
-            page = context.pages[0] if context.pages else await context.new_page()
+            context, page = await launch_member_context(p, member.id)
 
             try:
                 login_ok = await google_login(
-                    page, member.email, member.password, member.totp_secret or ""
+                    page, member.email,
+                    decrypt_safe(member.password),
+                    decrypt_safe(member.totp_secret) if member.totp_secret else "",
                 )
                 if not login_ok:
                     mark_failed(session, member, "Google 登录失败")

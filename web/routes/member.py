@@ -2,11 +2,12 @@ import logging
 import os
 import shutil
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify
 from sqlalchemy.orm import joinedload
 from db.database import get_session
 from db.models import Parent, Member
 from config import BROWSER_USER_DATA_DIR
+from utils.crypto import encrypt, decrypt_safe
 from web.task_manager import task_manager
 
 bp = Blueprint("member", __name__)
@@ -44,8 +45,6 @@ def list_members():
             data.append({
                 "id": m.id,
                 "email": m.email,
-                "password": m.password or "",
-                "totp_secret": m.totp_secret or "",
                 "parent_email": m.parent.email if m.parent else "-",
                 "parent_id": m.parent_id,
                 "status": m.status,
@@ -84,8 +83,8 @@ def add_member():
         m = Member(
             parent_id=parent_id,
             email=email,
-            password=password,
-            totp_secret=totp_secret or None,
+            password=encrypt(password),
+            totp_secret=encrypt(totp_secret) if totp_secret else None,
             remark=remark or None,
         )
         session.add(m)
@@ -145,8 +144,8 @@ def batch_import():
                 m = Member(
                     parent_id=parent_id,
                     email=email,
-                    password=password,
-                    totp_secret=totp_secret,
+                    password=encrypt(password),
+                    totp_secret=encrypt(totp_secret) if totp_secret else None,
                 )
                 session.add(m)
                 added_count += 1
@@ -239,7 +238,9 @@ def export_members():
 
         lines = []
         for m in members:
-            lines.append(f"{m.email}----{m.password}----{m.totp_secret or ''}")
+            plain_pwd = decrypt_safe(m.password) if m.password else ""
+            plain_totp = decrypt_safe(m.totp_secret) if m.totp_secret else ""
+            lines.append(f"{m.email}----{plain_pwd}----{plain_totp}")
 
         content = "\n".join(lines)
         return Response(
@@ -249,6 +250,19 @@ def export_members():
                 "Content-Disposition": "attachment; filename*=UTF-8''%E6%88%91%E7%9A%84%E8%B4%A6%E5%8F%B7.txt"
             },
         )
+
+
+@bp.route("/secret/<int:member_id>")
+def get_secret(member_id):
+    """按需返回成员的解密密码和 TOTP 密钥（不再嵌入 HTML 页面源码）"""
+    with get_session() as session:
+        m = session.get(Member, member_id)
+        if not m:
+            return jsonify({"error": "成员不存在"}), 404
+        return jsonify({
+            "password": decrypt_safe(m.password) if m.password else "",
+            "totp_secret": decrypt_safe(m.totp_secret) if m.totp_secret else "",
+        })
 
 
 @bp.route("/change_parent/<int:member_id>", methods=["POST"])

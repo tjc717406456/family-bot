@@ -1,17 +1,13 @@
 import logging
-import os
 from datetime import datetime
 
 import pyotp
 from playwright.async_api import async_playwright
 from rich.console import Console
 
-from config import (
-    BROWSER_HEADLESS, BROWSER_SLOW_MO, BROWSER_CHANNEL,
-    BROWSER_USER_DATA_DIR,
-)
 from db.database import get_session
 from db.models import Member
+from automation.browser import launch_member_context
 from automation.wait_utils import wait_for_url_change
 from automation.utils import take_screenshot, mark_error
 
@@ -34,23 +30,7 @@ async def antigravity_login(member_id: int, oauth_url: str) -> bool:
         logger.info("Antigravity 登录开始: %s, OAuth: %s", member.email, oauth_url[:120])
 
         async with async_playwright() as p:
-            member_profile_dir = os.path.join(BROWSER_USER_DATA_DIR, f"member_{member.id}")
-            os.makedirs(member_profile_dir, exist_ok=True)
-
-            context = await p.chromium.launch_persistent_context(
-                user_data_dir=member_profile_dir,
-                headless=BROWSER_HEADLESS,
-                slow_mo=BROWSER_SLOW_MO,
-                channel=BROWSER_CHANNEL,
-                viewport={"width": 1280, "height": 800},
-                locale="en-US",
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-infobars",
-                    "--no-first-run",
-                ],
-            )
-            page = context.pages[0] if context.pages else await context.new_page()
+            context, page = await launch_member_context(p, member.id)
 
             try:
                 console.print("[dim]打开 OAuth 链接...[/dim]")
