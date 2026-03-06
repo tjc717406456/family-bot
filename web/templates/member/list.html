@@ -191,23 +191,21 @@
                             <div class="ops-group">
                                 {% if m.status in ('pending', 'gemini_done', 'failed') %}
                                 <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline" onsubmit="return confirmRun()">
-                                    <button type="submit" class="btn btn-primary btn-xs"><i class="bi bi-play-fill"></i> 执行</button>
+                                    <button type="submit" class="btn btn-primary btn-xs">执行</button>
                                 </form>
                                 {% endif %}
                                 <form method="POST" action="/member/antigravity/{{ m.id }}" class="d-inline" onsubmit="return confirmAntigravity()">
-                                    <button type="submit" class="btn btn-xs" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6;"><i class="bi bi-rocket-takeoff"></i></button>
+                                    <button type="submit" class="btn btn-xs" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6;">Antigravity</button>
                                 </form>
                                 {% if m.status in ('failed', 'gemini_done', 'joined') %}
                                 <form method="POST" action="/member/reset/{{ m.id }}" class="d-inline">
-                                    <button type="submit" class="btn btn-warning btn-xs"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                    <button type="submit" class="btn btn-warning btn-xs">重置</button>
                                 </form>
                                 {% endif %}
                                 <form method="POST" action="/member/open_browser/{{ m.id }}" class="d-inline">
-                                    <button type="submit" class="btn btn-outline-secondary btn-xs"><i class="bi bi-globe2"></i></button>
+                                    <button type="submit" class="btn btn-outline-secondary btn-xs">浏览器</button>
                                 </form>
-                                <button class="btn btn-outline-danger btn-xs" data-bs-toggle="modal" data-bs-target="#delModal{{ m.id }}">
-                                    <i class="bi bi-trash3"></i>
-                                </button>
+                                <button class="btn btn-outline-danger btn-xs" data-bs-toggle="modal" data-bs-target="#delModal{{ m.id }}">删除</button>
                             </div>
                         </td>
                     </tr>
