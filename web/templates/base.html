@@ -5,53 +5,158 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Google Family Bot{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; }
-        .navbar-brand { font-weight: bold; }
-        .card { box-shadow: 0 1px 3px rgba(0,0,0,.1); }
-        .badge-pending { background-color: #ffc107; color: #212529; }
-        .badge-gemini_done { background-color: #0d6efd; }
-        .badge-joined { background-color: #198754; }
-        .badge-failed { background-color: #dc3545; }
-        .badge-running { background-color: #0dcaf0; color: #212529; }
-        .badge-done { background-color: #198754; }
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-shadow: 0 2px 12px rgba(0,0,0,.08);
+            --card-hover-shadow: 0 6px 24px rgba(0,0,0,.12);
+            --border-radius: 12px;
+            --nav-height: 60px;
+        }
+        * { box-sizing: border-box; }
+        body { background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif; min-height: 100vh; padding-bottom: 60px; }
+
+        .main-nav {
+            background: var(--primary-gradient);
+            box-shadow: 0 2px 16px rgba(102,126,234,.35);
+            height: var(--nav-height);
+        }
+        .main-nav .navbar-brand {
+            font-weight: 700; font-size: 1.15rem; letter-spacing: .3px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .main-nav .navbar-brand i { font-size: 1.3rem; }
+        .main-nav .nav-link {
+            font-weight: 500; font-size: .9rem; padding: .5rem .9rem !important;
+            border-radius: 8px; transition: background .2s;
+        }
+        .main-nav .nav-link:hover { background: rgba(255,255,255,.15); }
+        .main-nav .nav-link.active { background: rgba(255,255,255,.22); }
+
+        .page-header { margin-bottom: 1.5rem; }
+        .page-header h4 { font-weight: 700; font-size: 1.35rem; color: #1a1a2e; margin: 0; }
+
+        .card {
+            border: none; border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow); transition: box-shadow .2s, transform .2s;
+        }
+        .card:hover { box-shadow: var(--card-hover-shadow); }
+
+        .table { font-size: .875rem; margin-bottom: 0; }
+        .table thead th {
+            background: #f8f9fb; font-weight: 600; font-size: .8rem;
+            text-transform: uppercase; letter-spacing: .5px; color: #6b7280;
+            border-bottom: 2px solid #e5e7eb; padding: .75rem 1rem;
+        }
+        .table tbody td { padding: .7rem 1rem; vertical-align: middle; border-color: #f0f0f0; }
+        .table-hover tbody tr:hover { background: #f5f3ff; }
+
+        .badge-pending    { background: #fef3c7; color: #92400e; }
+        .badge-gemini_done { background: #dbeafe; color: #1e40af; }
+        .badge-joined     { background: #d1fae5; color: #065f46; }
+        .badge-failed     { background: #fee2e2; color: #991b1b; }
+        .badge-running    { background: #e0f2fe; color: #0369a1; }
+        .badge-done       { background: #d1fae5; color: #065f46; }
+
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .status-dot-pending    { background: #f59e0b; }
+        .status-dot-gemini_done { background: #3b82f6; }
+        .status-dot-joined     { background: #10b981; }
+        .status-dot-failed     { background: #ef4444; }
+        .status-dot-running    { background: #06b6d4; animation: pulse 1.5s infinite; }
+        .status-dot-done       { background: #10b981; }
+
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+        .btn { font-size: .875rem; font-weight: 500; border-radius: 8px; transition: all .15s; }
+        .btn-primary { background: #667eea; border-color: #667eea; }
+        .btn-primary:hover { background: #5a6fd6; border-color: #5a6fd6; transform: translateY(-1px); }
+        .btn-success { background: #10b981; border-color: #10b981; }
+        .btn-success:hover { background: #059669; border-color: #059669; }
+        .btn-danger { background: #ef4444; border-color: #ef4444; }
+        .btn-danger:hover { background: #dc2626; border-color: #dc2626; }
+
+        .btn-xs { font-size: .75rem; padding: 3px 10px; border-radius: 6px; }
+
+        .form-control, .form-select {
+            border-radius: 8px; border-color: #d1d5db; font-size: .875rem;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,.15);
+        }
+
+        .modal-content { border: none; border-radius: var(--border-radius); box-shadow: 0 20px 60px rgba(0,0,0,.15); }
+        .modal-header { border-bottom: 1px solid #f0f0f0; padding: 1.25rem 1.5rem; }
+        .modal-title { font-weight: 700; }
+        .modal-body { padding: 1.5rem; }
+        .modal-footer { border-top: 1px solid #f0f0f0; padding: 1rem 1.5rem; }
+
+        .alert { border: none; border-radius: 10px; font-size: .9rem; }
+
+        .empty-state { text-align: center; padding: 4rem 2rem; color: #9ca3af; }
+        .empty-state i { font-size: 3rem; margin-bottom: 1rem; display: block; opacity: .5; }
+        .empty-state p { font-size: 1rem; margin-bottom: 1rem; }
+
+        .copy-btn {
+            cursor: pointer; color: #667eea; border: 1px solid #667eea;
+            background: transparent; border-radius: 5px; font-size: .7rem;
+            padding: 2px 8px; transition: all .15s; font-weight: 500;
+        }
+        .copy-btn:hover { background: #667eea; color: #fff; }
+
+        .clear-btn {
+            cursor: pointer; color: #ef4444; border: 1px solid #ef4444;
+            background: transparent; border-radius: 5px; font-size: .7rem;
+            padding: 2px 8px; transition: all .15s; font-weight: 500;
+        }
+        .clear-btn:hover { background: #ef4444; color: #fff; }
+
+        .footer-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 40px;
+            background: #fff; border-top: 1px solid #e5e7eb;
+            display: flex; align-items: center; justify-content: center;
+            font-size: .75rem; color: #9ca3af; z-index: 100;
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <nav class="navbar navbar-expand-lg navbar-dark main-nav">
         <div class="container">
-            <a class="navbar-brand" href="/">Google Family Bot</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <a class="navbar-brand" href="/"><i class="bi bi-people-fill"></i> Family Bot</a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
+                <ul class="navbar-nav ms-3 gap-1">
                     <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">看板</a>
+                        <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/"><i class="bi bi-grid-1x2-fill me-1"></i>看板</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if '/parent' in request.path %}active{% endif %}" href="/parent/">家长</a>
+                        <a class="nav-link {% if '/parent' in request.path %}active{% endif %}" href="/parent/"><i class="bi bi-person-badge me-1"></i>家长</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if '/member' in request.path %}active{% endif %}" href="/member/">成员</a>
+                        <a class="nav-link {% if '/member' in request.path %}active{% endif %}" href="/member/"><i class="bi bi-person-lines-fill me-1"></i>成员</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if '/task' in request.path %}active{% endif %}" href="/task/">任务</a>
+                        <a class="nav-link {% if '/task' in request.path %}active{% endif %}" href="/task/"><i class="bi bi-play-circle me-1"></i>任务</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if '/config' in request.path %}active{% endif %}" href="/config/">配置</a>
+                        <a class="nav-link {% if '/config' in request.path %}active{% endif %}" href="/config/"><i class="bi bi-gear me-1"></i>配置</a>
                     </li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <div class="container">
+    <div class="container py-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         {% for category, message in messages %}
         <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <i class="bi {% if category == 'success' %}bi-check-circle-fill{% elif category == 'danger' %}bi-exclamation-triangle-fill{% elif category == 'warning' %}bi-exclamation-circle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
             {{ message }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -61,6 +166,8 @@
 
         {% block content %}{% endblock %}
     </div>
+
+    <div class="footer-bar">Family Bot &copy; 2024 &mdash; Google Family Group Automation</div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     {% block extra_js %}{% endblock %}

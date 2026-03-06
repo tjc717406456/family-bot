@@ -1,111 +1,100 @@
 {% extends "base.html" %}
-{% block title %}成员管理 - Google Family Bot{% endblock %}
+{% block title %}成员管理 - Family Bot{% endblock %}
 
 {% block extra_head %}
 <style>
-    .tool-bar { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-    .tool-bar .form-label { font-weight: 500; white-space: nowrap; }
-    .table th { font-size: 13px; text-align: center; vertical-align: middle; white-space: nowrap; }
-    .table td { font-size: 13px; vertical-align: middle; text-align: center; }
-    .table td:nth-child(2) { text-align: left; }
-    .table td:last-child { text-align: left; }
-    .td-error, .td-remark { text-align: left !important; max-width: 220px; }
-    .btn-xs { font-size: 11px; padding: 1px 6px; border-radius: 3px; }
-    .btn-group-ops { display: flex; gap: 4px; flex-wrap: wrap; }
-    .copy-btn { cursor: pointer; color: #0d6efd; border: 1px solid #0d6efd; background: transparent; border-radius: 3px; font-size: 11px; padding: 1px 6px; transition: all .15s; }
-    .copy-btn:hover { background: #0d6efd; color: #fff; }
-    .clear-btn { cursor: pointer; color: #dc3545; border: 1px solid #dc3545; background: transparent; border-radius: 3px; font-size: 11px; padding: 1px 6px; transition: all .15s; }
-    .clear-btn:hover { background: #dc3545; color: #fff; }
-    .remark-text { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; font-size: 12px; color: #495057; }
-    .error-text { font-size: 12px; }
-    .status-badge { font-size: 11px; padding: 3px 8px; border-radius: 4px; }
-    .add-form-card { border-left: 3px solid #198754; }
+    .toolbar { background: #fff; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; box-shadow: var(--card-shadow); }
+    .member-email { cursor: pointer; color: #667eea; font-weight: 600; font-size: .85rem; text-decoration: none; transition: color .15s; }
+    .member-email:hover { color: #5a6fd6; text-decoration: underline; }
+    .status-pill { font-size: .72rem; padding: 4px 10px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+    .remark-text { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; font-size: .78rem; color: #6b7280; }
+    .error-text { font-size: .78rem; }
+    .ops-group { display: flex; gap: 4px; flex-wrap: wrap; }
+    .add-form-card { border-left: 3px solid #10b981; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0">成员管理</h4>
-    <div>
-        <button class="btn btn-success btn-sm me-2" type="button" data-bs-toggle="modal" data-bs-target="#batchImportModal">
-            批量导入
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h4><i class="bi bi-person-lines-fill me-2" style="color:#667eea;"></i>成员管理</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-success btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#batchImportModal">
+            <i class="bi bi-upload me-1"></i>批量导入
         </button>
         <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#addForm">
-            + 添加成员
+            <i class="bi bi-plus-lg me-1"></i>添加成员
         </button>
     </div>
 </div>
 
-<!-- 工具栏：筛选 -->
-<div class="tool-bar">
-    <div class="row g-3 align-items-center">
-        <div class="col-auto">
-            <form method="GET" class="d-flex align-items-center gap-2">
-                <label class="form-label mb-0">家长筛选</label>
-                <select name="parent_id" class="form-select form-select-sm" style="width:220px;" onchange="this.form.submit()">
-                    <option value="">全部</option>
-                    {% for p in parents %}
-                    <option value="{{ p.id }}" {% if current_parent_id == p.id %}selected{% endif %}>{{ p.email }}</option>
-                    {% endfor %}
-                </select>
-            </form>
-        </div>
-        <div class="col-auto">
-            <a href="/member/export{% if current_parent_id %}?parent_id={{ current_parent_id }}{% endif %}" class="btn btn-outline-primary btn-sm">导出</a>
-        </div>
-    </div>
+<!-- 工具栏 -->
+<div class="toolbar d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <form method="GET" class="d-flex align-items-center gap-2">
+        <i class="bi bi-funnel text-muted"></i>
+        <select name="parent_id" class="form-select form-select-sm" style="width:240px;" onchange="this.form.submit()">
+            <option value="">全部家长</option>
+            {% for p in parents %}
+            <option value="{{ p.id }}" {% if current_parent_id == p.id %}selected{% endif %}>{{ p.email }}</option>
+            {% endfor %}
+        </select>
+    </form>
+    <a href="/member/export{% if current_parent_id %}?parent_id={{ current_parent_id }}{% endif %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-download me-1"></i>导出
+    </a>
 </div>
 
 <!-- 添加成员表单 -->
 <div class="collapse mb-3" id="addForm">
-    <div class="card card-body add-form-card">
-        <form method="POST" action="/member/add">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label">所属家长 <span class="text-danger">*</span></label>
-                    <select name="parent_id" class="form-select" required>
-                        <option value="">请选择</option>
-                        {% for p in parents %}
-                        <option value="{{ p.id }}">{{ p.email }}</option>
-                        {% endfor %}
-                    </select>
+    <div class="card add-form-card">
+        <div class="card-body">
+            <form method="POST" action="/member/add">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">所属家长 <span class="text-danger">*</span></label>
+                        <select name="parent_id" class="form-select" required>
+                            <option value="">请选择</option>
+                            {% for p in parents %}
+                            <option value="{{ p.id }}">{{ p.email }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">邮箱 <span class="text-danger">*</span></label>
+                        <input type="email" name="email" class="form-control" required autocomplete="off">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">密码 <span class="text-danger">*</span></label>
+                        <input type="password" name="password" class="form-control" required autocomplete="off">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">2FA 密钥 <span class="text-danger">*</span></label>
+                        <input type="text" name="totp_secret" class="form-control" required autocomplete="off">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">备注</label>
+                        <input type="text" name="remark" class="form-control" placeholder="可选">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="submit" class="btn btn-success w-100"><i class="bi bi-check-lg"></i></button>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">邮箱 <span class="text-danger">*</span></label>
-                    <input type="email" name="email" class="form-control" required autocomplete="off">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">密码 <span class="text-danger">*</span></label>
-                    <input type="text" name="password" class="form-control" required autocomplete="off">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">2FA密钥 <span class="text-danger">*</span></label>
-                    <input type="text" name="totp_secret" class="form-control" required autocomplete="off">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">备注</label>
-                    <input type="text" name="remark" class="form-control" placeholder="可选">
-                </div>
-            </div>
-            <div class="mt-2">
-                <button type="submit" class="btn btn-success btn-sm">提交</button>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
 </div>
 
-<!-- 批量导入模态框 -->
+<!-- 批量导入 -->
 <div class="modal fade" id="batchImportModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">批量导入成员</h5>
+                <h6 class="modal-title"><i class="bi bi-upload me-2 text-success"></i>批量导入成员</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="/member/batch_import">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">选择家长 <span class="text-danger">*</span></label>
+                        <label class="form-label fw-semibold">选择家长 <span class="text-danger">*</span></label>
                         <select name="parent_id" class="form-select" required>
                             <option value="">请选择家长</option>
                             {% for p in parents %}
@@ -114,24 +103,17 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">成员数据 <span class="text-danger">*</span></label>
-                        <textarea name="members_data" class="form-control" rows="10" required 
-                                  placeholder="每行一个成员，格式：邮箱----密码----2FA密钥&#10;或：邮箱----密码----辅助邮箱----2FA密钥&#10;支持中英文分号结尾，示例：&#10;user1@gmail.com----password123----ABCD1234EFGH5678;&#10;user2@gmail.com----password456----helper@gmail.com----IJKL9012MNOP3456；"></textarea>
-                        <div class="form-text">
-                            <strong>格式说明：</strong>
-                            <ul class="mb-0 mt-1">
-                                <li>每行一个成员，用 <code>----</code> 分隔字段</li>
-                                <li>格式1（3个字段）：<code>邮箱----密码----2FA密钥</code></li>
-                                <li>格式2（4个字段）：<code>邮箱----密码----辅助邮箱----2FA密钥</code>（辅助邮箱会自动跳过）</li>
-                                <li>每行结尾可以加分号（中文；或英文;），也可以不加</li>
-                                <li>如果邮箱已存在，会自动跳过</li>
-                            </ul>
+                        <label class="form-label fw-semibold">成员数据 <span class="text-danger">*</span></label>
+                        <textarea name="members_data" class="form-control" rows="8" required
+                                  placeholder="每行一个，格式：邮箱----密码----2FA密钥&#10;示例：user1@gmail.com----password123----ABCD1234EFGH5678"></textarea>
+                        <div class="form-text mt-2">
+                            用 <code>----</code> 分隔字段。支持 3 字段（邮箱/密码/2FA）和 4 字段（邮箱/密码/辅助邮箱/2FA）格式。
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="submit" class="btn btn-success">开始导入</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-upload me-1"></i>开始导入</button>
                 </div>
             </form>
         </div>
@@ -139,127 +121,139 @@
 </div>
 
 {% if members %}
-<div class="table-responsive">
-    <table class="table table-bordered table-hover bg-white mb-0">
-        <thead>
-            <tr class="table-dark">
-                <th>序号</th>
-                <th>邮箱</th>
-                <th>所属家长</th>
-                <th>状态</th>
-                <th>错误信息</th>
-                <th>备注</th>
-                <th>备注2</th>
-                <th>更新时间</th>
-                <th style="min-width:200px;">操作</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for m in members %}
-            <tr>
-                <td>{{ loop.index }}</td>
-                <td style="text-align:left;">
-                    <code style="cursor:pointer;text-decoration:underline;color:#0d6efd;" data-bs-toggle="modal" data-bs-target="#detailModal{{ m.id }}">{{ m.email }}</code>
-                </td>
-                <td><small class="text-muted">{{ m.parent_email }}</small></td>
-                <td><span class="badge status-badge badge-{{ m.status }}">{{ m.status }}</span></td>
-                <td class="td-error">
-                    {% if m.error_msg %}
-                    <div class="d-flex align-items-center gap-1">
-                        <span class="error-text text-danger text-truncate" style="max-width:160px;" title="{{ m.error_msg }}">{{ m.error_msg }}</span>
-                        <form method="POST" action="/member/clear_error/{{ m.id }}" class="d-inline">
-                            <button type="submit" class="clear-btn" title="清空错误">x</button>
-                        </form>
-                    </div>
-                    {% endif %}
-                </td>
-                <td class="td-remark">
-                    {% if m.remark %}
-                    <div class="d-flex align-items-center gap-1">
-                        <span class="remark-text" title="{{ m.remark }}">{{ m.remark }}</span>
-                        <button class="copy-btn" data-copy="{{ m.remark|e }}" onclick="copyText(this.dataset.copy, this)" title="复制">复制</button>
-                        <form method="POST" action="/member/clear_remark/{{ m.id }}" class="d-inline">
-                            <button type="submit" class="clear-btn" title="清空备注">x</button>
-                        </form>
-                    </div>
-                    {% endif %}
-                </td>
-                <td class="td-remark">
-                    <form method="POST" action="/member/save_remark2/{{ m.id }}" class="d-flex align-items-center gap-1">
-                        <input type="text" name="remark2" value="{{ m.remark2 }}" class="form-control form-control-sm" style="font-size:12px;min-width:100px;">
-                        <button type="submit" class="copy-btn" title="保存">保存</button>
-                        {% if m.remark2 %}
-                        <a href="#" onclick="this.closest('form').nextElementSibling.submit();return false;" class="clear-btn" title="清空">x</a>
-                        {% endif %}
-                    </form>
-                    {% if m.remark2 %}
-                    <form method="POST" action="/member/clear_remark2/{{ m.id }}" style="display:none;"></form>
-                    {% endif %}
-                </td>
-                <td><small class="text-muted">{{ m.updated_at }}</small></td>
-                <td>
-                    <div class="btn-group-ops">
-                        {% if m.status in ('pending', 'gemini_done', 'failed') %}
-                        <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline" onsubmit="return confirmRun()">
-                            <button type="submit" class="btn btn-primary btn-xs">执行</button>
-                        </form>
-                        {% endif %}
-                        <form method="POST" action="/member/antigravity/{{ m.id }}" class="d-inline" onsubmit="return confirmAntigravity()">
-                            <button type="submit" class="btn btn-info btn-xs text-white">Antigravity</button>
-                        </form>
-                        {% if m.status in ('failed', 'gemini_done', 'joined') %}
-                        <form method="POST" action="/member/reset/{{ m.id }}" class="d-inline">
-                            <button type="submit" class="btn btn-warning btn-xs">重置</button>
-                        </form>
-                        {% endif %}
-                        <form method="POST" action="/member/open_browser/{{ m.id }}" class="d-inline">
-                            <button type="submit" class="btn btn-secondary btn-xs">浏览器</button>
-                        </form>
-                        <button class="btn btn-danger btn-xs" data-bs-toggle="modal" data-bs-target="#delModal{{ m.id }}">删除</button>
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="text-center">#</th>
+                        <th>邮箱</th>
+                        <th>家长</th>
+                        <th class="text-center">状态</th>
+                        <th>错误</th>
+                        <th>备注</th>
+                        <th>备注2</th>
+                        <th>更新</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in members %}
+                    <tr>
+                        <td class="text-center text-muted">{{ loop.index }}</td>
+                        <td>
+                            <a class="member-email" data-bs-toggle="modal" data-bs-target="#detailModal{{ m.id }}">
+                                <i class="bi bi-envelope me-1" style="font-size:.75rem;"></i>{{ m.email }}
+                            </a>
+                        </td>
+                        <td><small class="text-muted">{{ m.parent_email }}</small></td>
+                        <td class="text-center">
+                            <span class="status-pill badge-{{ m.status }}">
+                                <span class="status-dot status-dot-{{ m.status }}"></span>{{ m.status }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if m.error_msg %}
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="error-text text-danger text-truncate" style="max-width:150px;" title="{{ m.error_msg }}">{{ m.error_msg }}</span>
+                                <form method="POST" action="/member/clear_error/{{ m.id }}" class="d-inline">
+                                    <button type="submit" class="clear-btn" title="清空">×</button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if m.remark %}
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="remark-text" title="{{ m.remark }}">{{ m.remark }}</span>
+                                <button class="copy-btn" data-copy="{{ m.remark|e }}" onclick="copyText(this.dataset.copy, this)">复制</button>
+                                <form method="POST" action="/member/clear_remark/{{ m.id }}" class="d-inline">
+                                    <button type="submit" class="clear-btn">×</button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="POST" action="/member/save_remark2/{{ m.id }}" class="d-flex align-items-center gap-1">
+                                <input type="text" name="remark2" value="{{ m.remark2 }}" class="form-control form-control-sm" style="font-size:.78rem;min-width:90px;">
+                                <button type="submit" class="copy-btn">保存</button>
+                                {% if m.remark2 %}
+                                <a href="#" onclick="this.closest('form').nextElementSibling.submit();return false;" class="clear-btn">×</a>
+                                {% endif %}
+                            </form>
+                            {% if m.remark2 %}
+                            <form method="POST" action="/member/clear_remark2/{{ m.id }}" style="display:none;"></form>
+                            {% endif %}
+                        </td>
+                        <td><small class="text-muted">{{ m.updated_at }}</small></td>
+                        <td>
+                            <div class="ops-group">
+                                {% if m.status in ('pending', 'gemini_done', 'failed') %}
+                                <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline" onsubmit="return confirmRun()">
+                                    <button type="submit" class="btn btn-primary btn-xs"><i class="bi bi-play-fill"></i> 执行</button>
+                                </form>
+                                {% endif %}
+                                <form method="POST" action="/member/antigravity/{{ m.id }}" class="d-inline" onsubmit="return confirmAntigravity()">
+                                    <button type="submit" class="btn btn-xs" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6;"><i class="bi bi-rocket-takeoff"></i></button>
+                                </form>
+                                {% if m.status in ('failed', 'gemini_done', 'joined') %}
+                                <form method="POST" action="/member/reset/{{ m.id }}" class="d-inline">
+                                    <button type="submit" class="btn btn-warning btn-xs"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                </form>
+                                {% endif %}
+                                <form method="POST" action="/member/open_browser/{{ m.id }}" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-secondary btn-xs"><i class="bi bi-globe2"></i></button>
+                                </form>
+                                <button class="btn btn-outline-danger btn-xs" data-bs-toggle="modal" data-bs-target="#delModal{{ m.id }}">
+                                    <i class="bi bi-trash3"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
-<!-- 所有弹窗放在表格外面 -->
+<!-- 弹窗 -->
 {% for m in members %}
 <div class="modal fade" id="detailModal{{ m.id }}" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">成员详情</h6>
+                <h6 class="modal-title"><i class="bi bi-person-circle me-2" style="color:#667eea;"></i>成员详情</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <table class="table table-sm table-borderless mb-0">
                     <tr>
-                        <td class="text-muted" style="width:80px;">邮箱</td>
+                        <td class="text-muted fw-semibold" style="width:80px;">邮箱</td>
                         <td>
-                            <code>{{ m.email }}</code>
+                            <code style="color:#667eea;">{{ m.email }}</code>
                             <button class="copy-btn ms-2" data-copy="{{ m.email }}" onclick="copyText(this.dataset.copy, this)">复制</button>
                         </td>
                     </tr>
                     <tr>
-                        <td class="text-muted">密码</td>
+                        <td class="text-muted fw-semibold">密码</td>
                         <td>
-                            <code id="pwd_{{ m.id }}">••••••••</code>
+                            <code id="pwd_{{ m.id }}" class="text-muted">••••••••</code>
                             <button class="copy-btn ms-2" onclick="toggleSecret({{ m.id }}, 'pwd_{{ m.id }}', 'password', this)">显示</button>
                             <button class="copy-btn ms-2" onclick="copySecret({{ m.id }}, 'password', this)">复制</button>
                         </td>
                     </tr>
                     <tr>
-                        <td class="text-muted">2FA 密钥</td>
+                        <td class="text-muted fw-semibold">2FA</td>
                         <td>
-                            <code id="totp_{{ m.id }}">••••••••</code>
+                            <code id="totp_{{ m.id }}" class="text-muted">••••••••</code>
                             <button class="copy-btn ms-2" onclick="toggleSecret({{ m.id }}, 'totp_{{ m.id }}', 'totp_secret', this)">显示</button>
                             <button class="copy-btn ms-2" onclick="copySecret({{ m.id }}, 'totp_secret', this)">复制</button>
                         </td>
                     </tr>
                     <tr>
-                        <td class="text-muted">家长</td>
+                        <td class="text-muted fw-semibold">家长</td>
                         <td>
                             <form method="POST" action="/member/change_parent/{{ m.id }}" class="d-flex align-items-center gap-2">
                                 <select name="parent_id" class="form-select form-select-sm" style="width:220px;">
@@ -272,13 +266,13 @@
                         </td>
                     </tr>
                     <tr>
-                        <td class="text-muted">状态</td>
-                        <td><span class="badge status-badge badge-{{ m.status }}">{{ m.status }}</span></td>
+                        <td class="text-muted fw-semibold">状态</td>
+                        <td><span class="status-pill badge-{{ m.status }}"><span class="status-dot status-dot-{{ m.status }}"></span>{{ m.status }}</span></td>
                     </tr>
                     {% if m.remark %}
                     <tr>
-                        <td class="text-muted">备注</td>
-                        <td style="word-break:break-all;font-size:12px;">{{ m.remark }}</td>
+                        <td class="text-muted fw-semibold">备注</td>
+                        <td style="word-break:break-all;font-size:.82rem;">{{ m.remark }}</td>
                     </tr>
                     {% endif %}
                 </table>
@@ -290,17 +284,17 @@
     </div>
 </div>
 <div class="modal fade" id="delModal{{ m.id }}" tabindex="-1">
-    <div class="modal-dialog modal-sm">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">确认删除</h6>
+                <h6 class="modal-title"><i class="bi bi-exclamation-triangle text-danger me-2"></i>确认删除</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">确定删除成员 <strong>{{ m.email }}</strong>？</div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
                 <form method="POST" action="/member/delete/{{ m.id }}" class="d-inline">
-                    <button type="submit" class="btn btn-danger btn-sm">确认删除</button>
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash3 me-1"></i>删除</button>
                 </form>
             </div>
         </div>
@@ -309,77 +303,54 @@
 {% endfor %}
 
 {% else %}
-<div class="text-center text-muted py-5">
-    <p>暂无成员数据</p>
-    <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#addForm">添加第一个成员</button>
+<div class="card">
+    <div class="card-body empty-state">
+        <i class="bi bi-people"></i>
+        <p>暂无成员数据</p>
+        <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#addForm">
+            <i class="bi bi-plus-lg me-1"></i>添加第一个成员
+        </button>
+    </div>
 </div>
 {% endif %}
 
 <script>
 var _secretCache = {};
-
 function _fetchSecret(memberId) {
     if (_secretCache[memberId]) return Promise.resolve(_secretCache[memberId]);
     return fetch('/member/secret/' + memberId)
         .then(function(r) { return r.json(); })
         .then(function(data) { _secretCache[memberId] = data; return data; });
 }
-
 function confirmRun() {
     return confirm('请确认已用主号发送了家庭组邀请邮件！\n\n点击「确定」继续执行，点击「取消」停止任务。');
 }
-
 function confirmAntigravity() {
-    return confirm('请确认该成员是否已经加入家庭组？\n\n点击「确定」将自动生成 OAuth 链接并执行，点击「取消」停止任务。');
+    return confirm('请确认该成员已经加入家庭组？\n\n点击「确定」将自动生成 OAuth 链接并执行。');
 }
-
 function toggleSecret(memberId, elId, field, btn) {
     var el = document.getElementById(elId);
     if (el.dataset.shown === '1') {
-        el.textContent = '••••••••';
-        el.dataset.shown = '';
-        btn.textContent = '显示';
+        el.textContent = '••••••••'; el.dataset.shown = ''; btn.textContent = '显示';
     } else {
         _fetchSecret(memberId).then(function(data) {
-            el.textContent = data[field] || '(空)';
-            el.dataset.shown = '1';
-            btn.textContent = '隐藏';
+            el.textContent = data[field] || '(空)'; el.dataset.shown = '1'; btn.textContent = '隐藏';
         });
     }
 }
-
 function copySecret(memberId, field, btn) {
     _fetchSecret(memberId).then(function(data) {
-        navigator.clipboard.writeText(data[field] || '').then(function() {
-            var orig = btn.innerHTML;
-            btn.innerHTML = '已复制';
-            btn.style.background = '#198754';
-            btn.style.borderColor = '#198754';
-            btn.style.color = '#fff';
-            setTimeout(function() {
-                btn.innerHTML = orig;
-                btn.style.background = '';
-                btn.style.borderColor = '';
-                btn.style.color = '';
-            }, 1500);
-        });
+        navigator.clipboard.writeText(data[field] || '').then(function() { flashBtn(btn); });
     });
 }
-
 function copyText(text, btn) {
-    navigator.clipboard.writeText(text).then(function() {
-        var orig = btn.innerHTML;
-        btn.innerHTML = '已复制';
-        btn.style.background = '#198754';
-        btn.style.borderColor = '#198754';
-        btn.style.color = '#fff';
-        setTimeout(function() {
-            btn.innerHTML = orig;
-            btn.style.background = '';
-            btn.style.borderColor = '';
-            btn.style.color = '';
-        }, 1500);
-    });
+    navigator.clipboard.writeText(text).then(function() { flashBtn(btn); });
+}
+function flashBtn(btn) {
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check2"></i> 已复制';
+    btn.style.background = '#10b981'; btn.style.borderColor = '#10b981'; btn.style.color = '#fff';
+    setTimeout(function() { btn.innerHTML = orig; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }, 1500);
 }
 </script>
 {% endblock %}

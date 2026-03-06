@@ -5,7 +5,7 @@ class TestDashboard:
     def test_index_returns_200(self, client):
         resp = client.get("/")
         assert resp.status_code == 200
-        assert "Google Family Bot" in resp.data.decode()
+        assert "Family Bot" in resp.data.decode()
 
 
 class TestParentRoutes:

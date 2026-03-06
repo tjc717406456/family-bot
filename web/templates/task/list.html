@@ -1,97 +1,120 @@
 {% extends "base.html" %}
-{% block title %}任务管理 - Google Family Bot{% endblock %}
+{% block title %}任务管理 - Family Bot{% endblock %}
+
+{% block extra_head %}
+<style>
+    .run-card { border-left: 3px solid #667eea; }
+    .task-badge { font-size: .72rem; padding: 4px 10px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+    .task-id { font-family: 'SF Mono', 'Fira Code', monospace; font-size: .72rem; color: #9ca3af; }
+</style>
+{% endblock %}
 
 {% block content %}
-<h4 class="mb-3">任务管理</h4>
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h4><i class="bi bi-play-circle me-2" style="color:#667eea;"></i>任务管理</h4>
+</div>
 
-<!-- 触发按钮区 -->
-<div class="card mb-4">
+<!-- 执行区域 -->
+<div class="card run-card mb-4">
     <div class="card-body">
-        <h6 class="card-title">执行自动化任务</h6>
-        <div class="d-flex flex-wrap gap-2 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0"><i class="bi bi-lightning-charge-fill text-warning me-2"></i>执行自动化任务</h6>
             <form method="POST" action="/task/run/all" class="d-inline" onsubmit="return confirmRun()">
-                <button type="submit" class="btn btn-primary" {% if total_pending == 0 %}disabled{% endif %}>
-                    全量执行 ({{ total_pending }} 个待处理)
+                <button type="submit" class="btn btn-primary btn-sm" {% if total_pending == 0 %}disabled{% endif %}>
+                    <i class="bi bi-play-fill me-1"></i>全量执行 <span class="badge bg-white text-primary ms-1">{{ total_pending }}</span>
                 </button>
             </form>
         </div>
 
         {% if parents %}
-        <h6>按家长执行</h6>
-        <div class="d-flex flex-wrap gap-2 mb-3">
-            {% for p in parents %}
-            <form method="POST" action="/task/run/parent/{{ p.id }}" class="d-inline" onsubmit="return confirmRun()">
-                <button type="submit" class="btn btn-outline-primary btn-sm" {% if p.pending_count == 0 %}disabled{% endif %}>
-                    {{ p.email }} ({{ p.pending_count }})
-                </button>
-            </form>
-            {% endfor %}
+        <div class="mb-3">
+            <small class="text-muted fw-semibold d-block mb-2"><i class="bi bi-person-badge me-1"></i>按家长</small>
+            <div class="d-flex flex-wrap gap-2">
+                {% for p in parents %}
+                <form method="POST" action="/task/run/parent/{{ p.id }}" class="d-inline" onsubmit="return confirmRun()">
+                    <button type="submit" class="btn btn-outline-primary btn-xs" {% if p.pending_count == 0 %}disabled{% endif %}>
+                        {{ p.email }} <span class="badge bg-primary bg-opacity-10 text-primary ms-1">{{ p.pending_count }}</span>
+                    </button>
+                </form>
+                {% endfor %}
+            </div>
         </div>
         {% endif %}
 
         {% if members %}
-        <h6>按成员执行</h6>
-        <div class="d-flex flex-wrap gap-2">
-            {% for m in members %}
-            <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline" onsubmit="return confirmRun()">
-                <button type="submit" class="btn btn-outline-secondary btn-sm">
-                    {{ m.email }} <span class="badge badge-{{ m.status }}">{{ m.status }}</span>
-                </button>
-            </form>
-            {% endfor %}
+        <div>
+            <small class="text-muted fw-semibold d-block mb-2"><i class="bi bi-person me-1"></i>按成员</small>
+            <div class="d-flex flex-wrap gap-2">
+                {% for m in members %}
+                <form method="POST" action="/task/run/member/{{ m.id }}" class="d-inline" onsubmit="return confirmRun()">
+                    <button type="submit" class="btn btn-outline-secondary btn-xs">
+                        {{ m.email }}
+                        <span class="status-pill badge-{{ m.status }} ms-1" style="font-size:.65rem;padding:2px 6px;">{{ m.status }}</span>
+                    </button>
+                </form>
+                {% endfor %}
+            </div>
         </div>
         {% endif %}
     </div>
 </div>
 
-<!-- 任务进度表格 -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0">任务状态</h5>
-    <form method="POST" action="/task/clear" class="d-inline">
-        <button type="submit" class="btn btn-outline-danger btn-sm">一键清理</button>
-    </form>
-</div>
-<div class="table-responsive">
-    <table class="table table-bordered table-hover bg-white" id="taskTable">
-        <thead class="table-light">
-            <tr>
-                <th>任务ID</th>
-                <th>类型</th>
-                <th>详情</th>
-                <th>状态</th>
-                <th>进度</th>
-                <th>开始时间</th>
-                <th>结束时间</th>
-                <th>错误</th>
-            </tr>
-        </thead>
-        <tbody id="taskBody">
-            {% for tid, t in tasks.items() %}
-            <tr>
-                <td><small>{{ tid }}</small></td>
-                <td>{{ t.type }}</td>
-                <td>
-                    {% if t.type == 'member' %}{{ t.email }}
-                    {% elif t.type == 'parent' %}{{ t.parent_email }} ({{ t.member_count }}个)
-                    {% else %}全量 ({{ t.member_count }}个)
-                    {% endif %}
-                </td>
-                <td><span class="badge badge-{{ t.status }}">{{ t.status }}</span></td>
-                <td>
-                    {% if t.get('member_count') %}{{ t.progress }}/{{ t.member_count }}
-                    {% elif t.status == 'done' %}完成
-                    {% elif t.status == 'running' %}执行中
-                    {% else %}-{% endif %}
-                </td>
-                <td>{{ t.started_at }}</td>
-                <td>{{ t.finished_at or '-' }}</td>
-                <td><small class="text-danger">{{ t.error or '' }}</small></td>
-            </tr>
-            {% else %}
-            <tr><td colspan="8" class="text-muted text-center">暂无任务记录</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- 任务状态 -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="d-flex justify-content-between align-items-center px-4 pt-3 pb-2">
+            <h6 class="fw-bold text-secondary mb-0"><i class="bi bi-list-task me-2"></i>任务状态</h6>
+            <form method="POST" action="/task/clear" class="d-inline">
+                <button type="submit" class="btn btn-outline-danger btn-xs"><i class="bi bi-trash3 me-1"></i>清理已完成</button>
+            </form>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="taskTable">
+                <thead>
+                    <tr>
+                        <th>任务</th>
+                        <th>类型</th>
+                        <th>详情</th>
+                        <th class="text-center">状态</th>
+                        <th class="text-center">进度</th>
+                        <th>开始</th>
+                        <th>结束</th>
+                        <th>错误</th>
+                    </tr>
+                </thead>
+                <tbody id="taskBody">
+                    {% for tid, t in tasks.items() %}
+                    <tr>
+                        <td><span class="task-id">{{ tid }}</span></td>
+                        <td>
+                            <span class="badge bg-light text-dark">
+                                {% if t.type == 'member' %}<i class="bi bi-person"></i>{% elif t.type == 'open_browser' %}<i class="bi bi-globe2"></i>{% elif t.type == 'antigravity' %}<i class="bi bi-rocket-takeoff"></i>{% else %}<i class="bi bi-collection"></i>{% endif %}
+                                {{ t.type }}
+                            </span>
+                        </td>
+                        <td class="fw-semibold" style="font-size:.85rem;">{{ t.email }}</td>
+                        <td class="text-center">
+                            <span class="task-badge badge-{{ t.status }}">
+                                <span class="status-dot status-dot-{{ t.status }}"></span>{{ t.status }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% if t.get('member_count') %}{{ t.progress }}/{{ t.member_count }}
+                            {% elif t.status == 'done' %}<i class="bi bi-check-circle-fill text-success"></i>
+                            {% elif t.status == 'running' %}<div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            {% else %}-{% endif %}
+                        </td>
+                        <td><small class="text-muted">{{ t.started_at }}</small></td>
+                        <td><small class="text-muted">{{ t.finished_at or '-' }}</small></td>
+                        <td><small class="text-danger">{{ t.error or '' }}</small></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>暂无任务记录</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -100,59 +123,41 @@
 function confirmRun() {
     return confirm('请确认已用主号发送了家庭组邀请邮件！\n\n点击「确定」继续执行，点击「取消」停止任务。');
 }
-
-// 记录哪些任务之前还在运行
 var prevRunning = {};
-
-// 每3秒轮询任务状态
 setInterval(function() {
-    fetch('/task/status/all')
-        .then(r => r.json())
-        .then(data => {
-            const tbody = document.getElementById('taskBody');
-            const entries = Object.entries(data);
-            if (entries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center">暂无任务记录</td></tr>';
-                return;
+    fetch('/task/status/all').then(r => r.json()).then(data => {
+        const tbody = document.getElementById('taskBody');
+        const entries = Object.entries(data);
+        if (entries.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>暂无任务记录</td></tr>';
+            return;
+        }
+        entries.forEach(([tid, t]) => {
+            if (t.status === 'done' && prevRunning[tid]) {
+                delete prevRunning[tid];
+                setTimeout(function() { window.location.href = '/member/'; }, 1500);
             }
-
-            // 检测是否有任务刚完成，跳转到成员列表
-            var hasRunning = false;
-            entries.forEach(([tid, t]) => {
-                if (t.status === 'running') hasRunning = true;
-                if (t.status === 'done' && prevRunning[tid]) {
-                    delete prevRunning[tid];
-                    setTimeout(function() { window.location.href = '/member/'; }, 1500);
-                }
-                if (t.status === 'running') prevRunning[tid] = true;
-            });
-
-            let html = '';
-            entries.forEach(([tid, t]) => {
-                let detail = '';
-                if (t.type === 'member') detail = t.email;
-                else if (t.type === 'parent') detail = t.parent_email + ' (' + t.member_count + '个)';
-                else detail = '全量 (' + t.member_count + '个)';
-
-                let progress = '-';
-                if (t.member_count) progress = t.progress + '/' + t.member_count;
-                else if (t.status === 'done') progress = '完成';
-                else if (t.status === 'running') progress = '执行中';
-
-                html += '<tr>' +
-                    '<td><small>' + tid + '</small></td>' +
-                    '<td>' + t.type + '</td>' +
-                    '<td>' + detail + '</td>' +
-                    '<td><span class="badge badge-' + t.status + '">' + t.status + '</span></td>' +
-                    '<td>' + progress + '</td>' +
-                    '<td>' + t.started_at + '</td>' +
-                    '<td>' + (t.finished_at || '-') + '</td>' +
-                    '<td><small class="text-danger">' + (t.error || '') + '</small></td>' +
-                    '</tr>';
-            });
-            tbody.innerHTML = html;
-        })
-        .catch(() => {});
+            if (t.status === 'running') prevRunning[tid] = true;
+        });
+        let html = '';
+        entries.forEach(([tid, t]) => {
+            let icon = t.type === 'member' ? 'bi-person' : t.type === 'open_browser' ? 'bi-globe2' : t.type === 'antigravity' ? 'bi-rocket-takeoff' : 'bi-collection';
+            let progress = '-';
+            if (t.member_count) progress = t.progress + '/' + t.member_count;
+            else if (t.status === 'done') progress = '<i class="bi bi-check-circle-fill text-success"></i>';
+            else if (t.status === 'running') progress = '<div class="spinner-border spinner-border-sm text-primary" role="status"></div>';
+            html += '<tr>' +
+                '<td><span class="task-id">' + tid + '</span></td>' +
+                '<td><span class="badge bg-light text-dark"><i class="bi ' + icon + '"></i> ' + t.type + '</span></td>' +
+                '<td class="fw-semibold" style="font-size:.85rem;">' + t.email + '</td>' +
+                '<td class="text-center"><span class="task-badge badge-' + t.status + '"><span class="status-dot status-dot-' + t.status + '"></span>' + t.status + '</span></td>' +
+                '<td class="text-center">' + progress + '</td>' +
+                '<td><small class="text-muted">' + t.started_at + '</small></td>' +
+                '<td><small class="text-muted">' + (t.finished_at || '-') + '</small></td>' +
+                '<td><small class="text-danger">' + (t.error || '') + '</small></td></tr>';
+        });
+        tbody.innerHTML = html;
+    }).catch(() => {});
 }, 3000);
 </script>
 {% endblock %}
