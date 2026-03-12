@@ -160,13 +160,30 @@ class TaskManager:
             logger.exception("Antigravity 登录失败: member_id=%s", member_id)
             self._finish_task(task_id, "failed", error=e)
 
+    def run_appeal(self, member_id: int, email: str):
+        """打开成员浏览器并访问申诉表单"""
+        task_id = self._create_task("appeal", member_id, email)
+        self._pool.submit(self._exec_appeal, task_id, member_id)
+        return task_id
+
+    def _exec_appeal(self, task_id: str, member_id: int):
+        from automation.appeal_form import open_appeal_form
+        try:
+            asyncio.run(open_appeal_form(member_id))
+            self._finish_task(task_id, "done")
+        except Exception as e:
+            logger.exception("认罪表单失败: member_id=%s", member_id)
+            self._finish_task(task_id, "failed", error=e)
+
     def _exec(self, task_id: str, member_ids: list):
         """在线程内逐个执行成员流程"""
         from cli.auto_cmd import run_member_flow
 
         try:
             for i, mid in enumerate(member_ids):
+                logger.info("_exec 开始执行成员: member_id=%s, task_id=%s", mid, task_id)
                 asyncio.run(run_member_flow(mid))
+                logger.info("_exec 成员执行完成: member_id=%s", mid)
                 with self._lock:
                     self._tasks[task_id]["progress"] = i + 1
             self._finish_task(task_id, "done")

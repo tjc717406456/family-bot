@@ -16,6 +16,10 @@ _DEFAULT_CONFIG = {
     "antigravity_api_key": "",
     "gcli2api_url": "",
     "gcli2api_api_key": "",
+    "haozhuma_api_url": "https://api.haozhuma.com/sms/",
+    "haozhuma_api_user": "",
+    "haozhuma_api_pass": "",
+    "haozhuma_project": "",
 }
 
 
@@ -53,6 +57,10 @@ def save():
     config["antigravity_api_key"] = request.form.get("antigravity_api_key", "").strip()
     config["gcli2api_url"] = request.form.get("gcli2api_url", "").strip()
     config["gcli2api_api_key"] = request.form.get("gcli2api_api_key", "").strip()
+    config["haozhuma_api_url"] = request.form.get("haozhuma_api_url", "").strip() or "https://api.haozhuma.com/sms/"
+    config["haozhuma_api_user"] = request.form.get("haozhuma_api_user", "").strip()
+    config["haozhuma_api_pass"] = request.form.get("haozhuma_api_pass", "").strip()
+    config["haozhuma_project"] = request.form.get("haozhuma_project", "").strip()
 
     try:
         _save_config(config)

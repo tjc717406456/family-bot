@@ -19,7 +19,10 @@ async def accept_family_invite(page: Page) -> bool:
 
     await page.goto(GMAIL_URL, wait_until="domcontentloaded", timeout=60000)
 
-    search_input = page.locator('input[aria-label="搜索邮件"], input[aria-label="Search mail"]').first
+    search_input = page.locator(
+        'input[aria-label="搜索邮件"], input[aria-label="Search mail"],'
+        ' input[aria-label="Ask Gmail"], input[aria-label="向 Gmail 提问"]'
+    ).first
     try:
         await search_input.wait_for(state="visible", timeout=20000)
         console.print("[dim]Gmail 搜索框已就绪[/dim]")
@@ -46,12 +49,22 @@ async def accept_family_invite(page: Page) -> bool:
             await search_input.fill(query)
             await page.keyboard.press("Enter")
 
+            # 等待 URL 变成搜索结果页
             try:
-                await result_indicator.first.wait_for(state="attached", timeout=15000)
-                await page.wait_for_timeout(2000)
+                await page.wait_for_function(
+                    '() => window.location.hash.startsWith("#search")',
+                    timeout=10000,
+                )
             except Exception:
-                console.print(f"[dim]搜索 '{query}' 等待超时[/dim]")
+                console.print(f"[dim]搜索 '{query}' URL 未变化[/dim]")
                 continue
+
+            # 等待搜索结果加载完成
+            try:
+                await page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass
+            await page.wait_for_timeout(2000)
 
             no_result = page.locator('td:has-text("No messages matched")')
             if await no_result.count() > 0:
@@ -85,28 +98,41 @@ async def accept_family_invite(page: Page) -> bool:
                 console.print(f"[dim]已点击邮件 (匹配方式: {clicked})[/dim]")
                 await page.wait_for_timeout(2000)
 
+                # 等待 URL 从搜索页变成邮件详情页
                 try:
                     await page.wait_for_function(
-                        '() => document.querySelectorAll("iframe").length > 0',
-                        timeout=10000,
+                        '() => !window.location.hash.startsWith("#search")',
+                        timeout=8000,
                     )
+                    console.print(f"[dim]已进入邮件详情: {page.url[-60:]}[/dim]")
                 except Exception:
-                    console.print("[yellow]点击后未进入邮件正文，重试点击[/yellow]")
+                    console.print("[yellow]URL 未变化，尝试双击邮件[/yellow]")
                     await _dismiss_gmail_popups(page)
                     for idx in range(await rows.count()):
                         row = rows.nth(idx)
                         if await row.is_visible():
                             text = await row.inner_text()
                             if "?" in text:
-                                await row.click()
+                                await row.dblclick()
                                 break
                     try:
                         await page.wait_for_function(
-                            '() => document.querySelectorAll("iframe").length > 0',
-                            timeout=10000,
+                            '() => !window.location.hash.startsWith("#search")',
+                            timeout=8000,
                         )
                     except Exception:
-                        await page.wait_for_timeout(3000)
+                        pass
+
+                # 等待邮件正文加载（iframe 或直接渲染）
+                await page.wait_for_timeout(3000)
+                try:
+                    await page.wait_for_function(
+                        '() => document.querySelectorAll("iframe").length > 0'
+                        ' || document.querySelector(\'a[href*="families.google"]\') !== null',
+                        timeout=10000,
+                    )
+                except Exception:
+                    await page.wait_for_timeout(3000)
 
                 mail_found = True
                 break
@@ -122,48 +148,84 @@ async def accept_family_invite(page: Page) -> bool:
 
     accept_href = None
 
-    console.print(f"[dim]当前页面 frame 数量: {len(page.frames)}[/dim]")
-    for i, frame in enumerate(page.frames):
-        try:
-            links_info = await frame.evaluate('''() => {
-                const links = document.querySelectorAll('a');
-                return Array.from(links).map(a => ({
-                    text: (a.innerText || '').trim().substring(0, 80),
-                    href: (a.href || '').substring(0, 150)
-                }));
-            }''')
-            if links_info:
-                console.print(f"[dim]Frame {i} 链接数: {len(links_info)}[/dim]")
-                for li in links_info:
-                    if li.get('text') or 'families.google' in li.get('href', ''):
-                        console.print(f"[dim]  -> text='{li['text']}' href={li['href']}[/dim]")
+    # 先在主页面直接查找 families.google.com 链接（新版 Gmail 可能不用 iframe）
+    try:
+        family_link = await page.evaluate('''() => {
+            const links = document.querySelectorAll('a');
+            for (const a of links) {
+                if (a.href && a.href.includes('families.google.com')) {
+                    return a.href;
+                }
+            }
+            return null;
+        }''')
+        if family_link:
+            accept_href = family_link
+            console.print(f"[dim]找到邀请链接(主页面URL匹配): href={accept_href[:100]}[/dim]")
+    except Exception:
+        pass
 
-            for text in ["Accept invitation", "Accept the invitation", "Join family group",
-                         "Join", "Accept", "接受邀请", "加入", "Open invitation"]:
-                link = frame.locator(f'a:has-text("{text}")').first
+    # 主页面文本匹配
+    if not accept_href:
+        for text in ["Accept invitation", "Accept the invitation", "Join family group",
+                     "Join", "Accept", "接受邀请", "加入", "Open invitation"]:
+            try:
+                link = page.locator(f'a:has-text("{text}")').first
                 if await link.is_visible():
                     accept_href = await link.get_attribute("href")
-                    console.print(f"[dim]找到邀请链接(文本匹配): text='{text}', href={accept_href[:100] if accept_href else 'None'}[/dim]")
-                    break
+                    if accept_href and "google" in accept_href:
+                        console.print(f"[dim]找到邀请链接(主页面文本匹配): text='{text}', href={accept_href[:100]}[/dim]")
+                        break
+                    accept_href = None
+            except Exception:
+                continue
 
-            if not accept_href:
-                family_link = await frame.evaluate('''() => {
+    # 在 iframe 中查找
+    if not accept_href:
+        console.print(f"[dim]主页面未找到链接，查找 iframe，frame 数量: {len(page.frames)}[/dim]")
+        for i, frame in enumerate(page.frames):
+            if frame == page.main_frame:
+                continue
+            try:
+                links_info = await frame.evaluate('''() => {
                     const links = document.querySelectorAll('a');
-                    for (const a of links) {
-                        if (a.href && a.href.includes('families.google.com')) {
-                            return a.href;
-                        }
-                    }
-                    return null;
+                    return Array.from(links).map(a => ({
+                        text: (a.innerText || '').trim().substring(0, 80),
+                        href: (a.href || '').substring(0, 150)
+                    }));
                 }''')
-                if family_link:
-                    accept_href = family_link
-                    console.print(f"[dim]找到邀请链接(URL匹配): href={accept_href[:100]}[/dim]")
+                if links_info:
+                    console.print(f"[dim]Frame {i} 链接数: {len(links_info)}[/dim]")
+                    for li in links_info:
+                        if li.get('text') or 'families.google' in li.get('href', ''):
+                            console.print(f"[dim]  -> text='{li['text']}' href={li['href']}[/dim]")
 
-            if accept_href:
-                break
-        except Exception:
-            continue
+                for text in ["Accept invitation", "Accept the invitation", "Join family group",
+                             "Join", "Accept", "接受邀请", "加入", "Open invitation"]:
+                    link = frame.locator(f'a:has-text("{text}")').first
+                    if await link.is_visible():
+                        accept_href = await link.get_attribute("href")
+                        console.print(f"[dim]找到邀请链接(iframe文本匹配): text='{text}', href={accept_href[:100] if accept_href else 'None'}[/dim]")
+                        break
+
+                if not accept_href:
+                    family_link = await frame.evaluate('''() => {
+                        const links = document.querySelectorAll('a');
+                        for (const a of links) {
+                            if (a.href && a.href.includes('families.google.com')) {
+                                return a.href;
+                            }
+                        }
+                        return null;
+                    }''')
+                    if family_link:
+                        accept_href = family_link
+                        console.print(f"[dim]找到邀请链接(iframe URL匹配): href={accept_href[:100]}[/dim]")
+
+                if accept_href:
+                    break
+            except Exception:
+                continue
 
     if accept_href:
         console.print("[dim]导航到邀请链接...[/dim]")
@@ -249,6 +311,7 @@ async def _confirm_join(page: Page):
                 await btn.click()
                 await wait_for_url_change(page, old_url, timeout=15000)
                 console.print(f"[dim]点击后页面: {page.url}[/dim]")
+                await page.wait_for_timeout(3000)
                 return
         except Exception:
             continue

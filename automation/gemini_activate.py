@@ -50,47 +50,56 @@ async def activate_gemini(page: Page) -> bool:
         except Exception:
             continue
 
-    try:
-        got_it_btn = page.locator('button:has-text("Got it")').or_(
-            page.locator('button:has-text("知道了")')
-        )
-        await got_it_btn.wait_for(state="visible", timeout=3000)
-        await click_and_wait_hidden(page, got_it_btn, timeout=3000)
-        console.print("[dim]跳过 Got it 提示[/dim]")
-    except Exception:
-        pass
+    # 关闭所有 Got it 提示（可能有多个）
+    for attempt in range(5):
+        try:
+            got_it_btn = page.locator('button:has-text("Got it")').or_(
+                page.locator('button:has-text("知道了")')
+            ).first
+            if await got_it_btn.is_visible():
+                await got_it_btn.click()
+                console.print(f"[dim]跳过 Got it 提示 ({attempt + 1})[/dim]")
+                await page.wait_for_timeout(1000)
+            else:
+                break
+        except Exception:
+            break
 
     random_name = random.choice(FIRST_NAMES)
     name_filled = False
 
-    # 策略1：通过 placeholder 精确定位 name 输入框
+    # 策略1：直接点击 "Give your Gem a name" 占位文本然后键盘输入
     try:
-        name_input = page.locator(
-            'input[placeholder*="name" i], '
-            'input[placeholder*="Gem" i], '
-            'input[aria-label*="name" i], '
-            'input[aria-label*="Gem" i]'
-        ).first
-        if await name_input.is_visible(timeout=5000):
-            await name_input.click()
-            await name_input.fill(random_name)
+        placeholder_el = page.locator('text="Give your Gem a name"').first
+        if await placeholder_el.is_visible(timeout=5000):
+            await placeholder_el.click()
+            await page.wait_for_timeout(500)
+            await page.keyboard.type(random_name, delay=50)
             name_filled = True
-            console.print(f"[dim]填入 Gem 名字 (placeholder定位): {random_name}[/dim]")
+            console.print(f"[dim]填入 Gem 名字 (点击占位文本): {random_name}[/dim]")
     except Exception:
         pass
 
-    # 策略2：点击 label 文字后用键盘输入
+    # 策略2：通过 placeholder / aria-label 定位 input 或 textarea
     if not name_filled:
         try:
-            label = page.locator('text="Give your Gem a name"').first
-            if await label.is_visible():
-                await label.click()
-                await page.wait_for_timeout(500)
-                active = await page.evaluate('() => document.activeElement?.tagName')
-                if active and active.lower() in ('input', 'textarea'):
-                    await page.keyboard.type(random_name)
-                    name_filled = True
-                    console.print(f"[dim]填入 Gem 名字 (点击label): {random_name}[/dim]")
+            name_input = page.locator(
+                'input[placeholder*="name" i], '
+                'textarea[placeholder*="name" i], '
+                'input[placeholder*="Gem" i], '
+                'textarea[placeholder*="Gem" i], '
+                'input[aria-label*="name" i], '
+                'textarea[aria-label*="name" i], '
+                'input[aria-label*="Gem" i], '
+                'textarea[aria-label*="Gem" i], '
+                '[contenteditable="true"][aria-label*="name" i], '
+                '[contenteditable="true"][aria-label*="Gem" i]'
+            ).first
+            if await name_input.is_visible(timeout=3000):
+                await name_input.click()
+                await name_input.fill(random_name)
+                name_filled = True
+                console.print(f"[dim]填入 Gem 名字 (placeholder定位): {random_name}[/dim]")
         except Exception:
             pass
 

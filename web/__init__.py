@@ -49,12 +49,14 @@ def create_app():
     from web.routes.member import bp as member_bp
     from web.routes.task import bp as task_bp
     from web.routes.config import bp as config_bp
+    from web.routes.sms import bp as sms_bp
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(parent_bp, url_prefix="/parent")
     app.register_blueprint(member_bp, url_prefix="/member")
     app.register_blueprint(task_bp, url_prefix="/task")
     app.register_blueprint(config_bp, url_prefix="/config")
+    app.register_blueprint(sms_bp, url_prefix="/sms")
 
     @app.errorhandler(404)
     def not_found(e):

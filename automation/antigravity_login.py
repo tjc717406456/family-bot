@@ -140,7 +140,8 @@ async def _handle_oauth_flow(page, member):
                 try:
                     if await totp_input.is_visible():
                         console.print("[dim]检测到 2FA 页面[/dim]")
-                        await _handle_2fa(page, member.totp_secret)
+                        from utils.crypto import decrypt_safe
+                        await _handle_2fa(page, decrypt_safe(member.totp_secret))
                         await wait_for_url_change(page, current_url, timeout=8000)
                         continue
                 except Exception:

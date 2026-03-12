@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}接码 - Family Bot{% endblock %}
+
+{% block extra_head %}
+<style>
+    .sms-card { border-left: 3px solid #8b5cf6; }
+    .result-card { background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%); }
+    .value-box {
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        border-radius: 10px;
+        padding: .9rem 1rem;
+        min-height: 48px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        word-break: break-all;
+    }
+    .help-text { font-size: .78rem; color: #9ca3af; margin-top: .35rem; }
+    .copy-row { display: flex; gap: .75rem; align-items: center; }
+    .copy-row .value-box { flex: 1; }
+    .status-bar {
+        padding: .6rem 1rem;
+        border-radius: 8px;
+        font-size: .88rem;
+        margin-bottom: 1rem;
+        display: none;
+    }
+    .status-bar.active { display: flex; align-items: center; gap: .5rem; }
+    .status-waiting { background: #fef3c7; color: #92400e; }
+    .status-success { background: #d1fae5; color: #065f46; }
+    .status-error { background: #fee2e2; color: #991b1b; }
+    .spinner-sm { width: 16px; height: 16px; border-width: 2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between gap-3 flex-wrap">
+    <h4><i class="bi bi-chat-dots me-2" style="color:#8b5cf6;"></i>手动接码</h4>
+    <a href="/config/" class="btn btn-outline-secondary"><i class="bi bi-gear me-1"></i>前往配置</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card sms-card">
+            <div class="card-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">项目 ID</label>
+                    <input type="text" id="projectId" class="form-control"
+                           value="{{ config.get('haozhuma_project', '') }}" placeholder="28209">
+                    <div class="help-text">默认读取配置页中保存的豪猪项目 ID</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">最大等待秒数</label>
+                    <input type="number" min="10" max="600" step="10" id="maxWait" class="form-control" value="180">
+                    <div class="help-text">取号后自动轮询等待验证码</div>
+                </div>
+
+                <div class="alert alert-info mb-3" style="background:#eff6ff;color:#1e40af;">
+                    <div><strong>当前配置</strong></div>
+                    <div class="mt-2" style="font-size:.88rem;">
+                        <div>API 地址：<code>{{ config.get('haozhuma_api_url', 'https://api.haozhuma.com/sms/') }}</code></div>
+                        <div>API 账号：<code>{{ config.get('haozhuma_api_user', '') or '未配置' }}</code></div>
+                        <div>项目 ID：<code>{{ config.get('haozhuma_project', '') or '未配置' }}</code></div>
+                    </div>
+                </div>
+
+                <button type="button" id="btnFetch" class="btn btn-primary w-100" onclick="startFetch()">
+                    <i class="bi bi-phone-vibrate me-1"></i>点击接码
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div id="statusBar" class="status-bar"></div>
+
+        <div class="card result-card">
+            <div class="card-body p-4">
+                <h5 class="mb-3"><i class="bi bi-inboxes me-2"></i>接码结果</h5>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">手机号</label>
+                    <div class="copy-row">
+                        <div id="resultPhone" class="value-box">暂无</div>
+                        <button type="button" id="btnCopyPhone" class="btn btn-outline-primary" onclick="copyPhone()" disabled>
+                            <i class="bi bi-copy me-1"></i>复制
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">验证码</label>
+                    <div class="copy-row">
+                        <div id="resultCode" class="value-box" style="font-size:1.2rem;font-weight:700;color:#7c3aed;">暂无</div>
+                        <button type="button" id="btnCopy" class="btn btn-outline-primary" onclick="copySmsCode()" disabled>
+                            <i class="bi bi-copy me-1"></i>复制
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label fw-semibold">短信原文</label>
+                    <div id="resultSms" class="value-box">暂无</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let pollTimer = null;
+let currentToken = '';
+let currentPhone = '';
+let currentProject = '';
+let pollStart = 0;
+let maxWaitMs = 180000;
+
+function setStatus(type, html) {
+    const bar = document.getElementById('statusBar');
+    bar.className = 'status-bar active status-' + type;
+    bar.innerHTML = html;
+}
+
+function hideStatus() {
+    document.getElementById('statusBar').className = 'status-bar';
+}
+
+function setResult(phone, code, sms) {
+    document.getElementById('resultPhone').textContent = phone || '暂无';
+    document.getElementById('resultCode').textContent = code || '暂无';
+    document.getElementById('resultSms').textContent = sms || '暂无';
+    document.getElementById('btnCopyPhone').disabled = !phone;
+    document.getElementById('btnCopy').disabled = !code;
+}
+
+function setBtnLoading(loading) {
+    const btn = document.getElementById('btnFetch');
+    if (loading) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-sm me-1"></span>接码中...';
+    } else {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-phone-vibrate me-1"></i>点击接码';
+    }
+}
+
+async function startFetch() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    setResult('', '', '');
+    setBtnLoading(true);
+    setStatus('waiting', '<span class="spinner-border spinner-sm"></span> 正在获取号码...');
+
+    const project = document.getElementById('projectId').value.trim();
+    maxWaitMs = (parseInt(document.getElementById('maxWait').value) || 180) * 1000;
+
+    try {
+        const resp = await fetch('/sms/get_phone', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({project: project})
+        });
+        const data = await resp.json();
+
+        if (!data.ok) {
+            setStatus('error', '<i class="bi bi-x-circle-fill"></i> ' + data.error);
+            setBtnLoading(false);
+            return;
+        }
+
+        currentToken = data.token;
+        currentPhone = data.phone;
+        currentProject = data.project;
+
+        setResult(data.phone, '', '');
+        setStatus('waiting', '<span class="spinner-border spinner-sm"></span> 已取号 <b>' + data.phone + '</b>，等待验证码...');
+
+        pollStart = Date.now();
+        pollTimer = setInterval(pollCode, 3000);
+        pollCode();
+    } catch (e) {
+        setStatus('error', '<i class="bi bi-x-circle-fill"></i> 请求失败: ' + e.message);
+        setBtnLoading(false);
+    }
+}
+
+async function pollCode() {
+    const elapsed = Date.now() - pollStart;
+    const sec = Math.round(elapsed / 1000);
+
+    if (elapsed > maxWaitMs) {
+        clearInterval(pollTimer); pollTimer = null;
+        setStatus('error', '<i class="bi bi-clock"></i> 等待超时 (' + sec + 's)，号码已拉黑');
+        setBtnLoading(false);
+        fetch('/sms/release', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({token: currentToken, phone: currentPhone, project: currentProject, action: 'black'})
+        });
+        return;
+    }
+
+    try {
+        const resp = await fetch('/sms/poll_code', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({token: currentToken, phone: currentPhone, project: currentProject})
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+            clearInterval(pollTimer); pollTimer = null;
+            setResult(currentPhone, data.code, data.sms_text);
+            setStatus('success', '<i class="bi bi-check-circle-fill"></i> 接码成功！');
+            setBtnLoading(false);
+        } else if (data.waiting) {
+            setStatus('waiting', '<span class="spinner-border spinner-sm"></span> 已取号 <b>' + currentPhone + '</b>，等待验证码... (' + sec + 's)');
+        } else {
+            setStatus('waiting', '<span class="spinner-border spinner-sm"></span> ' + (data.msg || '等待中') + ' (' + sec + 's)');
+        }
+    } catch (e) {
+        // 网络抖动不中断轮询
+    }
+}
+
+async function copyPhone() {
+    const text = (document.getElementById('resultPhone').innerText || '').trim();
+    if (!text || text === '暂无') return;
+    try {
+        await navigator.clipboard.writeText(text);
+        const btn = document.getElementById('btnCopyPhone');
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check2 me-1"></i>已复制';
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-success');
+        setTimeout(() => {
+            btn.innerHTML = oldHtml;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-primary');
+        }, 1500);
+    } catch (e) {
+        alert('复制失败，请手动复制');
+    }
+}
+
+async function copySmsCode() {
+    const text = (document.getElementById('resultCode').innerText || '').trim();
+    if (!text || text === '暂无') return;
+    try {
+        await navigator.clipboard.writeText(text);
+        const btn = document.getElementById('btnCopy');
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check2 me-1"></i>已复制';
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-success');
+        setTimeout(() => {
+            btn.innerHTML = oldHtml;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-primary');
+        }, 1500);
+    } catch (e) {
+        alert('复制失败，请手动复制');
+    }
+}
+</script>
+{% endblock %}

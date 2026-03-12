@@ -14,6 +14,14 @@ bp = Blueprint("member", __name__)
 logger = logging.getLogger(__name__)
 
 
+def _back_to_list():
+    """重定向回成员列表，保留家长筛选条件"""
+    parent_id = request.form.get("_parent_id") or request.args.get("parent_id")
+    if parent_id:
+        return redirect(url_for("member.list_members", parent_id=parent_id))
+    return redirect(url_for("member.list_members"))
+
+
 def _update_member_field(member_id, field, value, success_msg, fail_msg="成员不存在"):
     """通用的单字段更新辅助方法"""
     with get_session() as session:
@@ -25,7 +33,7 @@ def _update_member_field(member_id, field, value, success_msg, fail_msg="成员�
             session.commit()
             if success_msg:
                 flash(success_msg.format(email=m.email), "success")
-    return redirect(url_for("member.list_members"))
+    return _back_to_list()
 
 
 @bp.route("/")
@@ -72,13 +80,13 @@ def add_member():
 
     if not parent_id or not email or not password or not totp_secret:
         flash("家长、邮箱、密码、2FA密钥为必填项", "danger")
-        return redirect(url_for("member.list_members"))
+        return _back_to_list()
 
     with get_session() as session:
         exists = session.query(Member).filter_by(email=email).first()
         if exists:
             flash(f"成员 {email} 已存在", "warning")
-            return redirect(url_for("member.list_members"))
+            return _back_to_list()
 
         m = Member(
             parent_id=parent_id,
@@ -90,7 +98,7 @@ def add_member():
         session.add(m)
         session.commit()
         flash(f"成员 {email} 添加成功", "success")
-    return redirect(url_for("member.list_members"))
+    return _back_to_list()
 
 
 @bp.route("/batch_import", methods=["POST"])
@@ -100,7 +108,7 @@ def batch_import():
 
     if not parent_id or not members_data:
         flash("请选择家长并填写成员数据", "danger")
-        return redirect(url_for("member.list_members"))
+        return _back_to_list()
 
     with get_session() as session:
         lines = members_data.replace("\r\n", "\n").replace("\r", "\n").split("\n")
@@ -164,7 +172,7 @@ def batch_import():
 
         flash(result_msg, "success" if error_count == 0 else "warning")
 
-    return redirect(url_for("member.list_members"))
+    return _back_to_list()
 
 
 @bp.route("/delete/<int:member_id>", methods=["POST"])
@@ -189,7 +197,7 @@ def delete_member(member_id):
                     flash(f"成员 {email} 已删除，但清除登录信息失败: {e}", "warning")
             else:
                 flash(f"成员 {email} 已删除", "success")
-    return redirect(url_for("member.list_members"))
+    return _back_to_list()
 
 
 @bp.route("/reset/<int:member_id>", methods=["POST"])
@@ -203,7 +211,7 @@ def reset_member(member_id):
             m.error_msg = None
             session.commit()
             flash(f"成员 {m.email} 已重置为 pending", "success")
-    return redirect(url_for("member.list_members"))
+    return _back_to_list()
 
 
 @bp.route("/clear_error/<int:member_id>", methods=["POST"])
@@ -270,7 +278,7 @@ def change_parent(member_id):
     new_parent_id = request.form.get("parent_id", type=int)
     if not new_parent_id:
         flash("请选择家长", "danger")
-        return redirect(url_for("member.list_members"))
+        return _back_to_list()
 
     with get_session() as session:
         m = session.get(Member, member_id)
@@ -284,7 +292,7 @@ def change_parent(member_id):
                 m.parent_id = new_parent_id
                 session.commit()
                 flash(f"成员 {m.email} 已转移到家长 {parent.email}", "success")
-    return redirect(url_for("member.list_members"))
+    return _back_to_list()
 
 
 @bp.route("/open_browser/<int:member_id>", methods=["POST"])
@@ -293,10 +301,10 @@ def open_browser(member_id):
         member = session.get(Member, member_id)
         if not member:
             flash("成员不存在", "danger")
-            return redirect(url_for("member.list_members"))
+            return _back_to_list()
         task_id = task_manager.run_open_browser(member.id, member.email)
         flash(f"已启动成员 {member.email} 的浏览器 (任务ID: {task_id})", "info")
-    return redirect(url_for("member.list_members"))
+    return _back_to_list()
 
 
 @bp.route("/antigravity/<int:member_id>", methods=["POST"])
@@ -307,9 +315,22 @@ def antigravity(member_id):
         member = session.get(Member, member_id)
         if not member:
             flash("成员不存在", "danger")
-            return redirect(url_for("member.list_members"))
+            return _back_to_list()
 
         oauth_url = generate_oauth_url()
         task_id = task_manager.run_antigravity(member.id, member.email, oauth_url)
         flash(f"Antigravity 任务已启动: {member.email} (任务ID: {task_id})", "info")
-    return redirect(url_for("member.list_members"))
+    return _back_to_list()
+
+
+@bp.route("/appeal/<int:member_id>", methods=["POST"])
+def appeal(member_id):
+    with get_session() as session:
+        member = session.get(Member, member_id)
+        if not member:
+            flash("成员不存在", "danger")
+            return _back_to_list()
+
+        task_id = task_manager.run_appeal(member.id, member.email)
+        flash(f"认罪任务已启动: {member.email} (任务ID: {task_id})", "info")
+    return _back_to_list()

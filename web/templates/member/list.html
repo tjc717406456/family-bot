@@ -209,6 +209,9 @@
                                 <form method="POST" action="/member/open_browser/{{ m.id }}" class="d-inline">
                                     <button type="submit" class="btn btn-outline-secondary btn-xs">浏览器</button>
                                 </form>
+                                <form method="POST" action="/member/appeal/{{ m.id }}" class="d-inline">
+                                    <button type="submit" class="btn btn-xs" style="background:#dc2626;color:#fff;border-color:#dc2626;">认罪</button>
+                                </form>
                                 <button class="btn btn-outline-danger btn-xs" data-bs-toggle="modal" data-bs-target="#delModal{{ m.id }}">删除</button>
                             </div>
                         </td>
@@ -316,6 +319,18 @@
 {% endif %}
 
 <script>
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var pid = params.get('parent_id');
+    if (pid) {
+        document.querySelectorAll('form[method="POST"]').forEach(function(form) {
+            var h = document.createElement('input');
+            h.type = 'hidden'; h.name = '_parent_id'; h.value = pid;
+            form.appendChild(h);
+        });
+    }
+})();
+
 var _secretCache = {};
 function _fetchSecret(memberId) {
     if (_secretCache[memberId]) return Promise.resolve(_secretCache[memberId]);

@@ -82,6 +82,49 @@
                     </div>
                 </div>
 
+                <!-- 豪猪接码 -->
+                <div class="col-12">
+                    <div class="section-title mt-2"><i class="bi bi-phone me-2"></i>豪猪接码 (SMS 验证码)</div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">API 地址</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-link-45deg"></i></span>
+                                <input type="url" name="haozhuma_api_url" class="form-control"
+                                       value="{{ config.get('haozhuma_api_url', 'https://api.haozhuma.com/sms/') }}" placeholder="https://api.haozhuma.com/sms/">
+                            </div>
+                            <div class="help-text">豪猪平台 API 地址，一般无需修改</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">项目 ID <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-folder"></i></span>
+                                <input type="text" name="haozhuma_project" class="form-control"
+                                       value="{{ config.get('haozhuma_project', '') }}" placeholder="28209-J42JKRWAAM">
+                            </div>
+                            <div class="help-text">在豪猪平台搜索到的项目 ID</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">API 账号 <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-person"></i></span>
+                                <input type="text" name="haozhuma_api_user" class="form-control"
+                                       value="{{ config.get('haozhuma_api_user', '') }}" placeholder="API 账号">
+                            </div>
+                            <div class="help-text">在豪猪后台「API 配置」中获取</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">API 密码 <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-key"></i></span>
+                                <input type="password" name="haozhuma_api_pass" class="form-control"
+                                       value="{{ config.get('haozhuma_api_pass', '') }}" placeholder="API 密码">
+                            </div>
+                            <div class="help-text">在豪猪后台「API 配置」中获取</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 说明 -->
                 <div class="col-12 mt-2">
                     <div class="alert alert-info" style="background:#eff6ff;color:#1e40af;border-radius:10px;">
@@ -91,6 +134,7 @@
                             <li>配置好后，点击成员列表的 <strong>Antigravity</strong> 按钮即可自动完成授权</li>
                             <li><strong>Antigravity Manager</strong>：<code>/api/auth/url</code> + <code>/api/accounts/oauth/submit-code</code></li>
                             <li><strong>gcli2api</strong>：<code>/auth/start</code> + <code>/auth/callback-url</code></li>
+                            <li><strong>豪猪接码</strong>：Google 登录遇到手机验证时，自动从豪猪平台获取验证码填入</li>
                         </ul>
                     </div>
                 </div>
